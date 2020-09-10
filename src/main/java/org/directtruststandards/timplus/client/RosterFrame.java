@@ -405,7 +405,7 @@ public class RosterFrame extends JFrame
 			SingleChatManager.getInstance(con).setConnection(con);
 			
 			// init the incoming file transfer manager
-			IncomingFileTransferManager.getInstance(con).setConnection(con);
+			IncomingFileTransferManager.getInstance(con, this).setConnection(con);
 			
 		}
 		catch (Exception e)

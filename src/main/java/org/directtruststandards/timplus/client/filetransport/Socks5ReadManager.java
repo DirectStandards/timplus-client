@@ -20,11 +20,15 @@ public class Socks5ReadManager implements Runnable
 	
 	protected final JingleManager jingleManager;
 	
-	public Socks5ReadManager(FileTransferSession ftSession)
+	protected final FileTransferDataListener listener;
+	
+	public Socks5ReadManager(FileTransferSession ftSession, FileTransferDataListener listener)
 	{
 		this.ftSession = ftSession;
 		
 		this.util = new JingleUtil(ftSession.con);
+		
+		this.listener = listener;
 		
 		jingleManager = JingleManager.getInstanceFor(ftSession.con);
 	}
@@ -32,9 +36,7 @@ public class Socks5ReadManager implements Runnable
 	@SuppressWarnings("deprecation")
 	@Override
 	public void run()
-	{
-		final ReceiveFileStatusListener listener = new ReceiveFileStatusListener(ftSession.fileSize);
-		
+	{		
 		System.out.println("Starting to read file transfer data");
 		
 		OutputStream fStream = null;
@@ -57,7 +59,7 @@ public class Socks5ReadManager implements Runnable
 
 					try 
 					{
-						if (listener.dataTransfered(readSoFar) != 0)
+						if (listener != null && listener.dataTransfered(readSoFar) != 0)
 						{
 							// the transfer was interrupted by the listener
 							

@@ -272,6 +272,8 @@ public class OutgoingFileTransferDialog extends JDialog
 					break;
 				case SESSION_TERIMINATE:
 					statusStr = "Session terminated";
+					cancel.setVisible(false);
+					close.setVisible(true);
 					break;
 				case TRANSPORT_ACTIVATED:
 					statusStr = "Transfer activated";

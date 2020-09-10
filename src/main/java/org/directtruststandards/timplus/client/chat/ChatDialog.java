@@ -20,12 +20,16 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
+import javax.swing.KeyStroke;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
@@ -46,6 +50,10 @@ public class ChatDialog extends JDialog
 {
 	private static final long serialVersionUID = 8460553115637319919L;
 
+	private static final String TEXT_SUBMIT = "text-submit";
+	
+	private static final String INSERT_BREAK = "insert-break";
+	
 	protected AbstractXMPPConnection con;
 	
 	protected Jid contactJid;
@@ -89,15 +97,6 @@ public class ChatDialog extends JDialog
 		 */
 		chatText = new JTextPane();
 		chatText.setEditable(false);
-		chatText.setDropTarget(new DropTarget() 
-		{
-			private static final long serialVersionUID = 7559255704248380014L;
-
-			public synchronized void drop(DropTargetDropEvent evt) 
-		    {
-				sendFile(evt);
-		    }
-		});
 		
 		textScrollPane = new JScrollPane(chatText);
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -114,15 +113,7 @@ public class ChatDialog extends JDialog
 		createText = new JTextPane();
 		createText.setEditorKit(new WrapEditorKit());
 		createText.setSize(new Dimension(createText.getPreferredSize().width, 300));
-		createText.setDropTarget(new DropTarget() 
-		{
-			private static final long serialVersionUID = 7559255704248380014L;
-
-			public synchronized void drop(DropTargetDropEvent evt) 
-		    {
-				sendFile(evt);
-		    }
-		});		
+	
 		
 		final JScrollPane createtextScrollPane = new JScrollPane(createText);
 		createtextScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -138,16 +129,6 @@ public class ChatDialog extends JDialog
 		
 		final JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 		final JButton sendButton = new JButton("Send");
-		sendButton.addActionListener(new ActionListener()
-		{
-
-			@Override
-			public void actionPerformed(ActionEvent e)
-			{
-				sendMessage();		
-			}
-			
-		});
 		
 		buttonPanel.add(sendButton);
 		
@@ -160,6 +141,56 @@ public class ChatDialog extends JDialog
 		
 		getContentPane().add(textCreationPanel, BorderLayout.SOUTH);
 		
+		/*
+		 * Actions
+		 */
+		chatText.setDropTarget(new DropTarget() 
+		{
+			private static final long serialVersionUID = 7559255704248380014L;
+
+			public synchronized void drop(DropTargetDropEvent evt) 
+		    {
+				sendFile(evt);
+		    }
+		});
+		
+		createText.setDropTarget(new DropTarget() 
+		{
+			private static final long serialVersionUID = 7559255704248380014L;
+
+			public synchronized void drop(DropTargetDropEvent evt) 
+		    {
+				sendFile(evt);
+		    }
+		});
+		
+	    final InputMap input = createText.getInputMap();
+	    KeyStroke enter = KeyStroke.getKeyStroke("ENTER");
+	    KeyStroke shiftEnter = KeyStroke.getKeyStroke("shift ENTER");
+	    input.put(shiftEnter, INSERT_BREAK);
+	    input.put(enter, TEXT_SUBMIT);
+	    
+	    final ActionMap actions = createText.getActionMap();
+
+	    actions.put(TEXT_SUBMIT, new AbstractAction() 
+	    {
+	        @Override
+	        public void actionPerformed(ActionEvent e) 
+	        {
+	        	sendMessage();
+	        }
+	    });
+	    
+		sendButton.addActionListener(new ActionListener()
+		{
+
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				sendMessage();		
+			}
+			
+		});
 	}
 	
 	public void onIncomingMessage(Message msg)

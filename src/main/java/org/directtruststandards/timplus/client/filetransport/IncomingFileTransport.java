@@ -1,12 +1,15 @@
 package org.directtruststandards.timplus.client.filetransport;
 
 import java.awt.EventQueue;
+import java.awt.Frame;
 import java.io.File;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,7 +64,11 @@ public class IncomingFileTransport implements JingleHandler
 	
 	protected static ExecutorService transferFileExecutor;
 	
-	protected List<FileTransferDataListener> fileTransferDataListeners;
+	protected final Map<String, FileTransferDataListener> fileTransferDataListeners;
+	
+	protected final Map<String, FileTransferStatusListener> fileTransferStatusListeners;
+	
+	protected final Frame parentFrame;
 	
 	protected JingleUtil util;
 	
@@ -72,18 +79,39 @@ public class IncomingFileTransport implements JingleHandler
 		transferFileExecutor = Executors.newSingleThreadExecutor();	
 	}
 	
-	public IncomingFileTransport(AbstractXMPPConnection con)
+	public IncomingFileTransport(AbstractXMPPConnection con, Frame parentFrame)
 	{
 		this.con = con;
+		
+		this.parentFrame = parentFrame;
 		
 		this.jingleManager = JingleManager.getInstanceFor(con);
 		
 		this.util = new JingleUtil(con);
+		
+		this.fileTransferDataListeners = new HashMap<>();
+		
+		this.fileTransferStatusListeners = new HashMap<>();
 	}
 	
-	public void addFileTransferDataListener(FileTransferDataListener listener)
+	public void addFileTransferDataListener(String sessionId, FileTransferDataListener listener)
 	{
-		fileTransferDataListeners.add(listener);
+		fileTransferDataListeners.put(sessionId, listener);
+	}
+	
+	public void removeFileTransferDataListener(String sessionId)
+	{
+		fileTransferDataListeners.remove(sessionId);
+	}
+	
+	public void addFileTransferStatusistener(String sessionId, FileTransferStatusListener listener)
+	{
+		fileTransferStatusListeners.put(sessionId, listener);
+	}
+	
+	public void removeFileTransferStatusistener(String sessionId)
+	{
+		fileTransferStatusListeners.remove(sessionId);
 	}
 	
 	/**
@@ -110,8 +138,11 @@ public class IncomingFileTransport implements JingleHandler
 					ftSession.con = con;
 					TargetSessionManager sessionManager = new TargetSessionManager(ftSession);
 					
+					FileTransferStatusListener statusListener = null;
+					
 					try
 					{
+						
 						final StandardExtensionElement fileTransfer = (StandardExtensionElement)jingle.getContents().get(0).getDescription().getJingleContentDescriptionChildren().get(0);
 						
 						for (StandardExtensionElement element : fileTransfer.getElements())
@@ -127,7 +158,7 @@ public class IncomingFileTransport implements JingleHandler
 						}
 						
 						System.out.println("Contact " + jingle.getFrom().asBareJid().toString() + " requesting to send file.");
-		    			int selection = JOptionPane.showConfirmDialog(null, jingle.getFrom().asBareJid().toString() + " is requesting to send \r\nthe file " 
+		    			int selection = JOptionPane.showConfirmDialog(parentFrame, jingle.getFrom().asBareJid().toString() + " is requesting to send \r\nthe file " 
 		    					+ ftSession.fileName + ".  Do want to accept this file?",
 		    					"File Transfer", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
 						
@@ -149,7 +180,7 @@ public class IncomingFileTransport implements JingleHandler
 		    				{
 				    			JFileChooser chooser = new JFileChooser();
 				    			chooser.setSelectedFile(new File(ftSession.fileName));
-				    			int approve = chooser.showSaveDialog(null);
+				    			int approve = chooser.showSaveDialog(parentFrame);
 				    			
 				    			if (approve == JFileChooser.APPROVE_OPTION)
 				    				ftSession.fileName = chooser.getSelectedFile().getAbsolutePath();
@@ -179,7 +210,11 @@ public class IncomingFileTransport implements JingleHandler
 		    			
 						System.out.println("Accepted the incoming file transfer session to location " + ftSession.fileName);	
 						
+						ftSession.streamId = jingle.getSid();
+						final File file = new File(ftSession.fileName);
 						
+						IncomingFileTransferDialog statusDialog = new IncomingFileTransferDialog(file.getName(), IncomingFileTransport.this, ftSession);
+						statusDialog.setVisible(true);
 						
 						final Jingle sessionAccept = util.createSessionAccept(jingle.getFrom().asFullJidIfPossible(), jingle.getSid(), JingleContent.Creator.initiator, jingle.getContents().get(0).getName(), 
 								JingleContent.Senders.initiator, jingle.getContents().get(0).getDescription(), jingle.getContents().get(0).getTransport());
@@ -188,16 +223,19 @@ public class IncomingFileTransport implements JingleHandler
 						
 						final StanzaCollector fileOfferCollector = con.createStanzaCollectorAndSend(sessionAccept);
 						
+						statusListener = fileTransferStatusListeners.get(jingle.getSid());
+						
 						// make sure we get an ack
 						IQ result = fileOfferCollector.nextResultOrThrow();
 						
 						if (result != null && result instanceof EmptyResultIQ)
 						{
 							System.out.println("Session accept was acknowleged.");	
+							if (statusListener != null)
+								statusListener.statusUpdated(FileTransferState.SESSION_ACCEPT_ACK);
 							
 							// Set class member variables and kick off the session
 							// management thread
-							ftSession.streamId = jingle.getSid();
 							ftSession.fileTransferTargetJID = jingle.getTo().asEntityFullJidIfPossible();
 							ftSession.initiatorJID = jingle.getFrom().asEntityFullJidIfPossible();
 						
@@ -215,6 +253,8 @@ public class IncomingFileTransport implements JingleHandler
 
 							con.sendIqRequestAsync(sessionTerminate);
 							
+							if (statusListener != null)
+								statusListener.statusUpdated(FileTransferState.SESSION_TERIMINATE);
 							jingleManager.unregisterJingleSessionHandler(jingle.getFrom().asFullJidIfPossible(), jingle.getSid(), sessionManager);
 						}
 					}
@@ -224,8 +264,13 @@ public class IncomingFileTransport implements JingleHandler
 						
 						jingleManager.unregisterJingleSessionHandler(jingle.getFrom().asFullJidIfPossible(), jingle.getSid(), sessionManager);
 						
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.SESSION_TERIMINATE);
+						
 						final Jingle sessionTerm = util.createSessionTerminate(jingle.getFrom().asFullJidIfPossible(), jingle.getSid(), JingleReason.Timeout);
 						con.sendIqRequestAsync(sessionTerm);
+						
+						jingleManager.unregisterJingleSessionHandler(jingle.getFrom().asFullJidIfPossible(), jingle.getSid(), sessionManager);
 					}
 				}
 			});
@@ -236,6 +281,24 @@ public class IncomingFileTransport implements JingleHandler
 		
 	}
 
+	public void cancelFileTransfer(FileTransferSession ftSession)
+	{
+		if (ftSession == null)
+			return; 
+		
+		final Jingle sessionTerminate = util.createSessionTerminateFailedTransport(ftSession.initiatorJID, ftSession.streamId);
+
+		con.sendIqRequestAsync(sessionTerminate);
+		
+		jingleManager.unregisterJingleSessionHandler(ftSession.fileTransferTargetJID, ftSession.streamId, ftSession.sessionHandler);
+		
+		if (ftSession.sessionHandler != null && ftSession.sessionHandler instanceof TargetSessionManager)
+		{
+			final TargetSessionManager handler = (TargetSessionManager)ftSession.sessionHandler;
+			handler.ibbManager.removeIncomingBytestreamListener(ftSession.initiatorJID);
+		}
+	}
+	
 	protected class TargetSessionManager implements Runnable, JingleSessionHandler, BytestreamListener
 	{
 		protected InBandBytestreamManager ibbManager;
@@ -265,6 +328,8 @@ public class IncomingFileTransport implements JingleHandler
 		@Override
 		public IQ handleJingleSessionRequest(Jingle jingle)
 		{
+			final FileTransferStatusListener statusListener = fileTransferStatusListeners.get(jingle.getSid());
+			
 			if (jingle.getAction() == JingleAction.transport_info)
 			{
 				switch (TransportInfoType.getTransportInfoType(jingle.getContents().get(0)))
@@ -273,6 +338,9 @@ public class IncomingFileTransport implements JingleHandler
 					{
 						final JingleS5BTransportInfo.CandidateUsed candidateUsed = 
 								(JingleS5BTransportInfo.CandidateUsed)jingle.getContents().get(0).getTransport().getInfo();
+						
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.INITIATOR_CANDIDATE_USED);
 						
 						System.out.println("The initiator selected a proxy server with candidate ID " + candidateUsed.getCandidateId());
 						
@@ -289,8 +357,13 @@ public class IncomingFileTransport implements JingleHandler
 					{
 						// start reading
 						System.out.println("The initiator acitvated the proxy server.  Startup file transfer receive operation.");
+					
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.TRANSPORT_ACTIVATED);
 						
-						transferFileExecutor.execute(new Socks5ReadManager(ftSession));
+						FileTransferDataListener listener = fileTransferDataListeners.get(ftSession.streamId);
+						
+						transferFileExecutor.execute(new Socks5ReadManager(ftSession, listener));
 						
 						break;
 					}
@@ -298,17 +371,26 @@ public class IncomingFileTransport implements JingleHandler
 					{
 						System.out.println("The initiator reported a candidate error.  Aborting SOCKS5 transfer.");
 						
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.INITIATOR_CANDIDATE_USED_ERROR);
+						
 						break;
 					}	
 					case PROXY_ERROR:
 					{
 						System.out.println("The initiator reported a proxy error.  Aborting SOCKS5 transfer.");
 						
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.TRANSPORT_PROXY_ERROR);
+						
 						break;
 					}	
 					case UNKNOWN:
 						 default:
 					{
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.SESSION_UNKNOWN);
+						
 						break;
 					}
 				}
@@ -317,6 +399,9 @@ public class IncomingFileTransport implements JingleHandler
 			{
 				System.out.println("The initiator has requested to replace the transport with In-Band bytestreams.");
 				System.out.println("Acknowledging the transport-replace request.");
+				
+				if (statusListener != null)
+					statusListener.statusUpdated(FileTransferState.TRANSPORT_REPLACE);
 				
 				// by spec, we return an empty IQ result
 				final EmptyResultIQ result = new EmptyResultIQ();
@@ -333,6 +418,8 @@ public class IncomingFileTransport implements JingleHandler
 			{
 				System.out.println("The initiator has terminated the session.");
 				
+				if (statusListener != null)
+					statusListener.statusUpdated(FileTransferState.SESSION_TERIMINATE);
 				
 				ibbManager.addIncomingBytestreamListener(TargetSessionManager.this, ftSession.initiatorJID);
 				jingleManager.unregisterJingleSessionHandler(ftSession.initiatorJID, ftSession.streamId, this);
@@ -452,6 +539,8 @@ public class IncomingFileTransport implements JingleHandler
 		
 		protected void executeIBBFallBack()
 		{
+			final FileTransferStatusListener statusListener = fileTransferStatusListeners.get(ftSession.streamId);
+			
 			acceptFileExecutor.execute(new Runnable()
 			{
 				@Override
@@ -469,6 +558,9 @@ public class IncomingFileTransport implements JingleHandler
 						IQ result = con.createStanzaCollectorAndSend(transportAccept).nextResultOrThrow();
 						if (result != null && result instanceof EmptyResultIQ)
 						{						
+							if (statusListener != null)
+								statusListener.statusUpdated(FileTransferState.TRANSPORT_ACTIVATED);
+							
 							System.out.println("Received acknowledgement of transport accept.  Waiting for a In-Band file stream open message");
 						}
 						
@@ -481,6 +573,9 @@ public class IncomingFileTransport implements JingleHandler
 						final Jingle sessionTerminate = util.createSessionTerminateFailedTransport(ftSession.initiatorJID, ftSession.streamId);
 
 						con.sendIqRequestAsync(sessionTerminate);
+						
+						if (statusListener != null)
+							statusListener.statusUpdated(FileTransferState.SESSION_TERIMINATE);
 						
 						jingleManager.unregisterJingleSessionHandler(ftSession.fileTransferTargetJID, ftSession.streamId, TargetSessionManager.this);
 						ibbManager.removeIncomingBytestreamListener(ftSession.initiatorJID);
