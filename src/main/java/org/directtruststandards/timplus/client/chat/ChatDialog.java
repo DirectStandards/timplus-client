@@ -43,6 +43,7 @@ import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smackx.delay.packet.DelayInformation;
 import org.jxmpp.jid.EntityFullJid;
 import org.jxmpp.jid.Jid;
 
@@ -174,7 +175,9 @@ public class ChatDialog extends JDialog
 
 	    actions.put(TEXT_SUBMIT, new AbstractAction() 
 	    {
-	        @Override
+			private static final long serialVersionUID = -3128070169467821818L;
+
+			@Override
 	        public void actionPerformed(ActionEvent e) 
 	        {
 	        	sendMessage();
@@ -197,11 +200,22 @@ public class ChatDialog extends JDialog
 	{
 		final StyledDocument doc = chatText.getStyledDocument();
 		
+		// check to see if this is a delayed message
+	    final DelayInformation delay = (DelayInformation)msg.getExtension(DelayInformation.NAMESPACE);
+		
 		final String pattern = "HH:mm:ss";
 		final SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
-		final String date = simpleDateFormat.format(new Date());
-
+		
+		String date = "";
+		if (delay == null)
+			date = simpleDateFormat.format(new Date());
+		else
+		{
+			date = simpleDateFormat.format(delay.getStamp()) + " Offline";
+		}
+		
 		final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
+		
 		
 		/*
 		 * Do this on the event queue so the 
@@ -323,10 +337,4 @@ public class ChatDialog extends JDialog
 		 		    "File Transfer", JOptionPane.ERROR_MESSAGE);
         }
 	}
-	
-	
-	
-	
-	
-	
 }

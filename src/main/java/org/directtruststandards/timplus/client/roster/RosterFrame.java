@@ -1,4 +1,4 @@
-package org.directtruststandards.timplus.client;
+package org.directtruststandards.timplus.client.roster;
 
 import java.awt.AWTEvent;
 import java.awt.BorderLayout;
@@ -38,16 +38,15 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 
+
 import org.apache.commons.lang3.StringUtils;
-import org.directtruststandards.timplus.client.AddContactDialog.AddContactStatus;
 import org.directtruststandards.timplus.client.chat.SingleChatManager;
 import org.directtruststandards.timplus.client.config.Configuration;
 import org.directtruststandards.timplus.client.config.ConfigurationManager;
 import org.directtruststandards.timplus.client.filetransport.IncomingFileTransferManager;
-import org.directtruststandards.timplus.client.roster.RosterItem;
+import org.directtruststandards.timplus.client.roster.AddContactDialog.AddContactStatus;
 import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
-import org.directtruststandards.timplus.client.roster.RosterTableModel;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.SmackException.ConnectionException;
@@ -124,11 +123,16 @@ public class RosterFrame extends JFrame
 		
 		/*
 		 * Contacts List
-		 */
+		 */		
 		contactsList = new JTable(new RosterTableModel(Collections.emptyList()));
+
+		
 		contactsList.setTableHeader(null);
+		contactsList.setRowHeight(30);
+		contactsList.setDefaultRenderer(RosterItem.class, new RosterItemRenderer());
+		//contactsList.getTableHeader().setResizingAllowed(false);
 		contactsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-	
+		
 		final JScrollPane scrollPane = new JScrollPane(contactsList);
 		contactsList.setFillsViewportHeight(true);
 		
@@ -228,6 +232,17 @@ public class RosterFrame extends JFrame
 		});
 		contactPopup.add(deleteItem);
 		
+		final JMenuItem subRequest = new JMenuItem("Send Subscription Request");
+		subRequest.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				sendSubscriptionRequest();
+				
+			}	
+		});
+		contactPopup.add(subRequest);
 		
 		/*
 		 * Actions
@@ -253,8 +268,6 @@ public class RosterFrame extends JFrame
 			{
 				JOptionPane.showMessageDialog(this,"Configuration is incomplete.  The TIM+ Client will now exit.", 
 			 		    "Incomplete Configuration", JOptionPane.WARNING_MESSAGE );
-				
-
 				/*
 				 * hard exit
 				 */
@@ -484,9 +497,9 @@ public class RosterFrame extends JFrame
 		int idx = contactsList.getSelectedRow();
 		if (idx >= 0)
 		{
-			final Jid deleteJid = (Jid)contactsList.getModel().getValueAt(idx, 1);
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
 			
-			int selection = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete the contact " + deleteJid.toString() + "?",
+			int selection = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete the contact " + item.getRosterJID().toString() + "?",
 					"Delete Contact", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
 			
 			if (selection == JOptionPane.NO_OPTION)
@@ -495,7 +508,7 @@ public class RosterFrame extends JFrame
 			
 			for (RosterEntry entry : roster.getEntries())
 			{
-				if (entry.getJid().toString().compareToIgnoreCase(deleteJid.toString()) == 0)
+				if (entry.getJid().toString().compareToIgnoreCase(item.getRosterJID().toString()) == 0)
 				{
 					try
 					{
@@ -520,9 +533,31 @@ public class RosterFrame extends JFrame
 		int idx = contactsList.getSelectedRow();
 		if (idx >= 0)
 		{
-			final Jid chatJid = (Jid)contactsList.getModel().getValueAt(idx, 1);
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
 		
-			SingleChatManager.getInstance(con).createChat(chatJid);
+			SingleChatManager.getInstance(con).createChat(item.getRosterJID());
+		}
+	}
+	
+	protected void sendSubscriptionRequest()
+	{
+		int idx = contactsList.getSelectedRow();
+		if (idx >= 0)
+		{
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
+		
+			Presence pres = new Presence(Presence.Type.subscribe);
+			pres.setTo(item.rosterJID.asBareJid());
+			
+			try
+			{
+				con.sendStanza(pres);
+			}
+			catch (Exception e)
+			{
+				JOptionPane.showMessageDialog(this,"An error occured sending the presence subscription request.", 
+			 		    "Subscription Request", JOptionPane.ERROR_MESSAGE );
+			}
 		}
 	}
 	
@@ -556,21 +591,38 @@ public class RosterFrame extends JFrame
 		
 		for (int i = 0; i < contactsList.getModel().getRowCount(); ++i)
 		{
-			final Jid contact = (Jid)contactsList.getModel().getValueAt(i, 1);
-			if (from.asBareJid().equals(contact.asBareJid()))
+			final RosterItem contact = (RosterItem)contactsList.getModel().getValueAt(i, 0);
+			if (from.asBareJid().equals(contact.getRosterJID().asBareJid()))
 			{
+				final RosterItem rosterItem = (RosterItem)contactsList.getModel().getValueAt(i, 0);
+				
 				if (pres.getType() == Presence.Type.available)
-					contactsList.getModel().setValueAt(RosterItem.Presense.AVAILABLE, i, 0);
+				{
+					rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
+					contactsList.getModel().setValueAt(rosterItem, i, 0);
+				}
 				else if (pres.getType() == Presence.Type.unavailable)
-					contactsList.getModel().setValueAt(RosterItem.Presense.UNAVAILABLE, i, 0);
-
+				{
+					rosterItem.setPresence(RosterItem.Presense.UNAVAILABLE);
+					contactsList.getModel().setValueAt(rosterItem, i, 0);
+					// double check the presense in case this user is logged in
+					// via more than 1 client (might have multiple resources)
+					final Presence presense = roster.getPresence(contact.getRosterJID().asBareJid());
+					if (presense != null && presense.getType() == Presence.Type.available)
+					{
+						rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
+						contactsList.getModel().setValueAt(rosterItem, i, 0);
+					}	
+				}
 				// need to check the roster and see if the approval status changed
 				for (RosterEntry entry : roster.getEntries())
 				{
-					if (entry.getJid().equals(contact.asBareJid()))
+					if (entry.getJid().equals(contact.getRosterJID().asBareJid()))
 					{
 						final Subscription sub = entry.canSeeHisPresence() ? Subscription.APPROVED : entry.isSubscriptionPending() ? Subscription.REQUESTED : Subscription.DENIED;
-						contactsList.getModel().setValueAt(sub, i, 2);
+						rosterItem.setSub(sub);
+						contactsList.getModel().setValueAt(rosterItem, i, 0);
+						
 						break;
 					}
 				}

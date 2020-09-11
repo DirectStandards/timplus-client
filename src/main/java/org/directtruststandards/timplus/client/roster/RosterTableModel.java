@@ -4,10 +4,6 @@ import java.util.List;
 
 import javax.swing.table.AbstractTableModel;
 
-import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
-import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
-import org.jxmpp.jid.Jid;
-
 public class RosterTableModel extends AbstractTableModel
 {
 	private static final long serialVersionUID = -6387854970042572629L;
@@ -29,33 +25,13 @@ public class RosterTableModel extends AbstractTableModel
 	@Override
     public int getColumnCount() 
     {
-        return 3;
+        return 1;
     }
     
 	@Override
     public Object getValueAt(int row, int colum)
     {
-		final RosterItem item = rosterData.get(row);
-		
-		switch (colum)
-		{
-			case 0:
-			{
-				return item.getPresence();
-			}
-			case 1:
-			{
-				return item.getRosterJID();
-			}
-			case 2:
-			{
-				return item.getSub();
-			}
-			default:
-			{
-				return item.getRosterJID();
-			}
-		}
+		return rosterData.get(row);
     }
 	
 	@Override
@@ -63,20 +39,20 @@ public class RosterTableModel extends AbstractTableModel
     {
 		final RosterItem item = rosterData.get(rowIndex);
 		
-		switch (columnIndex)
-		{
-			case 0:
-				item.setPresence((Presense)aValue);
-				break;
-			case 1:
-				item.setRosterJID((Jid)aValue);
-				break;
-			case 2:
-				item.setSub((Subscription)aValue);
-				break;
-		}
+		final RosterItem upItem = (RosterItem)aValue;
+		
+		item.setPresence(upItem.getPresence());
+		item.setRosterJID(upItem.getRosterJID());
+		item.setPresenceStatusText(upItem.getPresenceStatusText());
+		item.setSub(upItem.getSub());
 		
 		this.fireTableCellUpdated(rowIndex, columnIndex);
+    }
+	
+	@Override
+    public Class<?> getColumnClass(int columnIndex) 
+    {
+		return RosterItem.class;
     }
 	
 	public void addRow(RosterItem item)

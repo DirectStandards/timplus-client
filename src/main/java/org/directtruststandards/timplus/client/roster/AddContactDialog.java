@@ -1,4 +1,4 @@
-package org.directtruststandards.timplus.client;
+package org.directtruststandards.timplus.client.roster;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
