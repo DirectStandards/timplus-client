@@ -47,6 +47,7 @@ import org.directtruststandards.timplus.client.filetransport.IncomingFileTransfe
 import org.directtruststandards.timplus.client.roster.AddContactDialog.AddContactStatus;
 import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
+import org.directtruststandards.timplus.client.vcard.VCardManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.SmackException.ConnectionException;
@@ -243,6 +244,17 @@ public class RosterFrame extends JFrame
 			}	
 		});
 		contactPopup.add(subRequest);
+		
+		final JMenuItem viewVCard = new JMenuItem("View vCard");
+		viewVCard.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				viewVCard();
+			}	
+		});
+		contactPopup.add(viewVCard);
 		
 		/*
 		 * Actions
@@ -561,6 +573,16 @@ public class RosterFrame extends JFrame
 		}
 	}
 	
+	protected void viewVCard()
+	{
+		int idx = contactsList.getSelectedRow();
+		if (idx >= 0)
+		{
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
+			VCardManager.getInstance(con).showVCard(item.getRosterJID());
+		}
+	}
+	
 	protected void loadRoster()
 	{
 		final List<RosterItem> rosterItems = new ArrayList<>();
@@ -621,6 +643,10 @@ public class RosterFrame extends JFrame
 					{
 						final Subscription sub = entry.canSeeHisPresence() ? Subscription.APPROVED : entry.isSubscriptionPending() ? Subscription.REQUESTED : Subscription.DENIED;
 						rosterItem.setSub(sub);
+						
+						if (sub != Subscription.APPROVED)
+							rosterItem.setPresence(Presense.NOT_AUTHORIZED);
+						
 						contactsList.getModel().setValueAt(rosterItem, i, 0);
 						
 						break;
