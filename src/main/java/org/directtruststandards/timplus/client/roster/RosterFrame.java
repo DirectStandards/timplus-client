@@ -2,6 +2,7 @@ package org.directtruststandards.timplus.client.roster;
 
 import java.awt.AWTEvent;
 import java.awt.BorderLayout;
+import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
@@ -65,7 +66,6 @@ import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration.Builder;
 import org.jxmpp.jid.Jid;
 import org.springframework.stereotype.Component;
 
-@Component
 public class RosterFrame extends JFrame
 {
 	
@@ -278,13 +278,16 @@ public class RosterFrame extends JFrame
 			
 			if (!ConfigurationManager.getInstance().isCompleteConfiguration())
 			{
-				JOptionPane.showMessageDialog(this,"Configuration is incomplete.  The TIM+ Client will now exit.", 
-			 		    "Incomplete Configuration", JOptionPane.WARNING_MESSAGE );
-				/*
-				 * hard exit
-				 */
-				System.exit(-1);
-				return;
+		        EventQueue.invokeLater(() -> 
+		        {
+					JOptionPane.showMessageDialog(this,"Configuration is incomplete.  The TIM+ Client will now exit.", 
+				 		    "Incomplete Configuration", JOptionPane.WARNING_MESSAGE );
+					/*
+					 * hard exit
+					 */
+					System.exit(-1);
+					return;
+		        });
 			}
 		}
 		

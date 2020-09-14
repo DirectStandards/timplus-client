@@ -8,7 +8,6 @@ import org.directtruststandards.timplus.client.roster.RosterFrame;
 import org.jivesoftware.smack.provider.ProviderManager;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.context.ApplicationContext;
 
 @SpringBootApplication
 public class TIMPlusClientApplication
@@ -16,13 +15,13 @@ public class TIMPlusClientApplication
     public static void main(String[] args) 
     {
 
-        ApplicationContext ctx = new SpringApplicationBuilder(TIMPlusClientApplication.class)
+        new SpringApplicationBuilder(TIMPlusClientApplication.class)
                 .headless(false).run(args);
 
+    	final RosterFrame ex = new RosterFrame();
+        
         EventQueue.invokeLater(() -> 
         {
-
-        	final RosterFrame ex = ctx.getBean(RosterFrame.class);
             ex.setVisible(true);
             
             ProviderManager.addIQProvider(CredRequest.ELEMENT, CredRequest.NAMESPACE, new CredRequestProvider());

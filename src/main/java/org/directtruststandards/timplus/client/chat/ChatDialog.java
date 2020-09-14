@@ -18,7 +18,11 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -36,6 +40,7 @@ import javax.swing.text.StyledDocument;
 
 import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.filetransport.OutgoingFileTransferDialog;
+import org.directtruststandards.timplus.client.notifications.AMPMessageNotification;
 import org.directtruststandards.timplus.client.util.WrapEditorKit;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
@@ -65,6 +70,8 @@ public class ChatDialog extends JDialog
 	
 	protected JScrollPane textScrollPane;
 	
+	protected Map<String, AtomicInteger> unackedMessages; 
+	
 	public ChatDialog(Jid contactJid, AbstractXMPPConnection con)
 	{
 		super((Frame)null, contactJid.toString());
@@ -72,6 +79,8 @@ public class ChatDialog extends JDialog
 		this.contactJid = contactJid;
 		
 		this.con = con;
+		
+		this.unackedMessages = new HashMap<>();
 		
 		setSize(400, 400);
 		
@@ -226,19 +235,25 @@ public class ChatDialog extends JDialog
             @Override
             public void run() 
             {
-    			builder.append(msg.getFrom().asBareJid().getLocalpartOrNull());
-    			builder.append("\r\n");
-    			
-    			try
-    			{
-	    			final SimpleAttributeSet red = new SimpleAttributeSet();
-	    			StyleConstants.setForeground(red, Color.red);
-	    			StyleConstants.setItalic(red, true);
-	    			doc.insertString(doc.getLength(), builder.toString(), red);
-	    			doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
-    			}
-    			catch (Exception e) {}
-    			
+            	synchronized(unackedMessages)
+            	{
+	            	
+	    			builder.append(msg.getFrom().asBareJid().getLocalpartOrNull());
+	    			
+	    			
+	    			builder.append("\r\n");
+	    			
+	    			try
+	    			{
+		    			final SimpleAttributeSet red = new SimpleAttributeSet();
+		    			StyleConstants.setForeground(red, Color.red);
+		    			StyleConstants.setItalic(red, true);
+		    			
+		    			doc.insertString(doc.getLength(), builder.toString(), red);
+		    			doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
+	    			}
+	    			catch (Exception e) {}
+            	}
             }
         });
 
@@ -256,7 +271,11 @@ public class ChatDialog extends JDialog
 			{
 				final String text = createText.getText().trim();
 				
-				chat.send(text);	
+		        Message stanza = new Message();
+		        stanza.setBody(text);
+		        stanza.setType(Message.Type.chat);
+				
+				chat.send(stanza);	
 				
 				final StyledDocument doc = chatText.getStyledDocument();
 				
@@ -266,7 +285,11 @@ public class ChatDialog extends JDialog
 
 				final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
 				builder.append("Me");
-				builder.append("\r\n");
+				
+    			int notificationInsertLoc = doc.getLength() + builder.toString().length();
+    			unackedMessages.put(stanza.getStanzaId(), new AtomicInteger(notificationInsertLoc));
+				
+    			builder.append("\r\n");
 				
 				final SimpleAttributeSet blue = new SimpleAttributeSet();
 				StyleConstants.setForeground(blue, Color.blue);
@@ -283,6 +306,64 @@ public class ChatDialog extends JDialog
 			 		    "Message failure", JOptionPane.ERROR_MESSAGE );
 			}
 			
+		}
+	}
+	
+	public void onIncomingAMPMessage(AMPMessageNotification notif)
+	{
+		synchronized (unackedMessages)
+		{
+			final AtomicInteger notifLoc = unackedMessages.remove(notif.getStanzaId());
+			if (notifLoc != null)
+			{
+				final StringBuilder builder = new StringBuilder("  ");
+				switch (notif.getMessageStatus())
+				{
+					case DELIVERED:
+						builder.append("delivered");
+						break;
+					case STORED_OFFLINE:
+						builder.append("stored offline");
+						break;
+					case ERROR:
+						builder.append("error");
+						break;
+				}
+				
+				final SimpleAttributeSet notifFont = new SimpleAttributeSet();
+				StyleConstants.setForeground(notifFont, Color.gray);
+				StyleConstants.setItalic(notifFont, true);
+				StyleConstants.setAlignment(notifFont, StyleConstants.ALIGN_RIGHT);
+				
+		        java.awt.EventQueue.invokeLater(new Runnable() 
+		        {
+		            @Override
+		            public void run() 
+		            {
+		            	synchronized(unackedMessages)
+		            	{
+		            	
+			            	final StyledDocument doc = chatText.getStyledDocument();
+			            	try
+			            	{
+			            		doc.insertString(notifLoc.get(), builder.toString(), notifFont);
+			            		
+				            	// shift all exiting un-acked message locations
+				            	for (Entry<String, AtomicInteger> entry : unackedMessages.entrySet())
+				            	{
+				            		if (entry.getKey() != notif.getStanzaId() && entry.getValue().get() > notifLoc.get())
+				            		{
+				            			int newLoc = entry.getValue().get() + builder.toString().length();
+				            			entry.getValue().set(newLoc);
+				            		}
+				            	}
+			            	}
+			            	catch (Exception e) {};
+		            	}
+		            }
+		        });
+				
+			}
 		}
 	}
 	

@@ -7,6 +7,9 @@ import java.util.Map;
 
 import javax.swing.JDialog;
 
+import org.directtruststandards.timplus.client.notifications.AMPMessageNotification;
+import org.directtruststandards.timplus.client.notifications.AMPNotificationManager;
+import org.directtruststandards.timplus.client.notifications.IncomingAMPMessageListener;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
@@ -70,6 +73,17 @@ public class SingleChatManager
         
         for (ChatDialog chatDialog : activeChats.values())
         	chatDialog.resetChat(con);
+        
+        AMPNotificationManager.getInstanceFor(con).addIncomingAMPListener(new IncomingAMPMessageListener()
+        {
+
+			@Override
+			public void newIncomingAMPMessage(EntityBareJid from, Message message, AMPMessageNotification notif)
+			{
+				processIncomingAMPMessage(from, message, notif);
+			}
+        	
+        });
 	}
 	
 	public ChatDialog createChat(final Jid contactJid)
@@ -117,5 +131,14 @@ public class SingleChatManager
 		final ChatDialog chatDialog = createChat(from.asBareJid());
 
 		chatDialog.onIncomingMessage(message);
+	}
+	
+	protected void processIncomingAMPMessage(EntityBareJid from, Message message, AMPMessageNotification notif)
+	{
+		// only deliver to active chats
+		final ChatDialog chat = activeChats.get(from.asBareJid());
+
+		if (chat != null)
+			chat.onIncomingAMPMessage(notif);
 	}
 }
