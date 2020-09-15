@@ -17,7 +17,6 @@ import java.net.URL;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,6 +35,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 
@@ -45,6 +45,9 @@ import org.directtruststandards.timplus.client.chat.SingleChatManager;
 import org.directtruststandards.timplus.client.config.Configuration;
 import org.directtruststandards.timplus.client.config.ConfigurationManager;
 import org.directtruststandards.timplus.client.filetransport.IncomingFileTransferManager;
+import org.directtruststandards.timplus.client.groupchat.GroupChatEvent;
+import org.directtruststandards.timplus.client.groupchat.GroupChatEventListener;
+import org.directtruststandards.timplus.client.groupchat.GroupChatManager;
 import org.directtruststandards.timplus.client.roster.AddContactDialog.AddContactStatus;
 import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
@@ -63,8 +66,8 @@ import org.jivesoftware.smack.sasl.SASLErrorException;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration.Builder;
+import org.jivesoftware.smackx.muc.MultiUserChat;
 import org.jxmpp.jid.Jid;
-import org.springframework.stereotype.Component;
 
 public class RosterFrame extends JFrame
 {
@@ -73,6 +76,8 @@ public class RosterFrame extends JFrame
 
 	protected JTable contactsList;
 
+	protected JTable groupChatList;
+	
 	protected JLabel connected;
 	
 	protected JLabel disconnected;
@@ -87,15 +92,20 @@ public class RosterFrame extends JFrame
 	
 	protected JPopupMenu contactPopup;
 	
+	protected GroupChatListener groupChatListener;
+	
 	public RosterFrame()
 	{
 		super("TIM+ Client");
+		
+		groupChatListener = new GroupChatListener();
+		
 		setDefaultLookAndFeelDecorated(true);
-		setSize(300, 400);
+		setSize(400, 500);
 		
 		Point pt = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
 		
-		this.setLocation(pt.x - (150), pt.y - (200));			
+		this.setLocation(pt.x - (200), pt.y - (250));			
 		
 	    enableEvents(AWTEvent.WINDOW_EVENT_MASK);
 	    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -114,30 +124,37 @@ public class RosterFrame extends JFrame
 		this.getContentPane().setLayout(new BorderLayout());
 		
 		/*
+		 * 
+		 */
+		final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+		
+		final JPanel rosterPanel = new JPanel(new BorderLayout()); 
+		
+		
+		/*
 		 * Contacts Label
 		 */
 		final JPanel rosterLabelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		final JLabel rosterLabel = new JLabel("Contacts:"); 
 		rosterLabelPanel.add(rosterLabel);
 		
-		this.getContentPane().add(rosterLabelPanel, BorderLayout.NORTH);
+		rosterPanel.add(rosterLabelPanel, BorderLayout.NORTH);
 		
 		/*
 		 * Contacts List
 		 */		
-		contactsList = new JTable(new RosterTableModel(Collections.emptyList()));
+		contactsList = new JTable(new RosterTableModel(new ArrayList<>()));
 
 		
 		contactsList.setTableHeader(null);
 		contactsList.setRowHeight(30);
 		contactsList.setDefaultRenderer(RosterItem.class, new RosterItemRenderer());
-		//contactsList.getTableHeader().setResizingAllowed(false);
 		contactsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		
 		final JScrollPane scrollPane = new JScrollPane(contactsList);
 		contactsList.setFillsViewportHeight(true);
 		
-		this.getContentPane().add(scrollPane);
+		rosterPanel.add(scrollPane, BorderLayout.CENTER);
 		
 		/*
 		 * Status 
@@ -169,6 +186,49 @@ public class RosterFrame extends JFrame
 		
 		this.getContentPane().add(statusPanel, BorderLayout.SOUTH);
 		
+		tabbedPane.addTab("Roster", rosterPanel);
+		
+		
+		this.getContentPane().add(tabbedPane);
+		
+		/*
+		 * Group chat tab
+		 */
+		final JPanel groupChatPanel = new JPanel(new BorderLayout());
+		
+		/*
+		 * Group chat label 
+		 *
+		 */
+		final JPanel groupChagLabelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		final JLabel groupChagLabel= new JLabel("Active Group Chats Rooms:"); 
+		groupChagLabelPanel.add(groupChagLabel);
+		
+		groupChatPanel.add(groupChagLabelPanel, BorderLayout.NORTH);
+		
+		
+		/*
+		 * Group Chat List
+		 */		
+		groupChatList = new JTable(new GroupChatTableModel(new ArrayList<>()));
+
+		
+		groupChatList.setTableHeader(null);
+		groupChatList.setRowHeight(30);
+		groupChatList.setDefaultRenderer(GroupChatItem.class, new GroupChatItemRenderer());
+		groupChatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		
+		final JScrollPane groupChatScrollPane = new JScrollPane(groupChatList);
+		groupChatList.setFillsViewportHeight(true);
+		
+		groupChatPanel.add(groupChatScrollPane);
+		
+		
+		
+		tabbedPane.addTab("Group Chats", groupChatPanel);
+		
+		
+		
 		/*
 		 * Menu bar
 		 */
@@ -176,7 +236,7 @@ public class RosterFrame extends JFrame
 		
 		
 		final JMenu contactsMenu = new JMenu("Contacts");
-		final JMenuItem addContact = new JMenuItem("Add contact");
+		final JMenuItem addContact = new JMenuItem("Add Contact...");
 		addContact.addActionListener(new ActionListener()
 		{
 			@Override
@@ -187,8 +247,21 @@ public class RosterFrame extends JFrame
 		});
 		contactsMenu.add(addContact);
 		
+		final JMenu groupChatMenu = new JMenu("Group Chat");
+		final JMenuItem newChatRoom = new JMenuItem("New Chat Room");
+		newChatRoom.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				newGroupChat();
+			}	
+		});
+		groupChatMenu.add(newChatRoom);
+		
+		
 		final JMenu accountMenu = new JMenu("Account");
-		final JMenuItem configAccount = new JMenuItem("Configure/Modify");
+		final JMenuItem configAccount = new JMenuItem("Configure/Modify...");
 		configAccount.addActionListener(new ActionListener()
 		{
 			@Override
@@ -200,6 +273,7 @@ public class RosterFrame extends JFrame
 		accountMenu.add(configAccount);
 		
 		menuBar.add(contactsMenu);
+		menuBar.add(groupChatMenu);
 		menuBar.add(accountMenu);
 		
 		this.setJMenuBar(menuBar);
@@ -432,6 +506,10 @@ public class RosterFrame extends JFrame
 			// init the chat manager
 			SingleChatManager.getInstance(con).setConnection(con);
 			
+			// init the group chat manager
+			GroupChatManager.getInstance(con).setConnection(con);
+			GroupChatManager.getInstance(con).registerGroupChatEventListener(groupChatListener);
+			
 			// init the incoming file transfer manager
 			IncomingFileTransferManager.getInstance(con, this).setConnection(con);
 			
@@ -552,6 +630,13 @@ public class RosterFrame extends JFrame
 		
 			SingleChatManager.getInstance(con).createChat(item.getRosterJID());
 		}
+	}
+	
+	protected void newGroupChat()
+	{
+		final GroupChatManager manager = GroupChatManager.getInstance(con);
+		
+		manager.createGroupChat();
 	}
 	
 	protected void sendSubscriptionRequest()
@@ -682,5 +767,50 @@ public class RosterFrame extends JFrame
 				imContact();
 			}
 		}
+	}
+	
+	protected class GroupChatListener implements GroupChatEventListener
+	{
+		public GroupChatListener()
+		{
+			
+		}
+
+		@Override
+		public void onGroupChatEvent(GroupChatEvent event)
+		{
+			final GroupChatTableModel model = (GroupChatTableModel)groupChatList.getModel();
+			
+			switch(event.getEvent())
+			{
+				case ROOM_EXIT:
+				{
+					for (int i = 0; i < model.getRowCount(); ++i)
+					{
+						final GroupChatItem item = (GroupChatItem)model.getValueAt(i, 1);
+						if (item.getRoom().getRoom().equals(event.getRoom().getRoom()) )
+						{
+							model.removeRow(i);
+							break;
+						}
+					}	
+					break;
+				}
+				case ROOM_ENTER:
+				{
+
+					final GroupChatItem item = new GroupChatItem();
+					item.setRoom(event.getRoom());
+
+					model.addRow(item);
+					
+					break;
+				}
+				
+
+				default:
+					break;
+			}
+		}	
 	}
 }
