@@ -393,8 +393,8 @@ public class GroupChatDialog extends JDialog
 		{
 			case available:
 			{
-				if (presence.getMode() == null)
-					action = presence.getFrom().getResourceOrNull() + " entered the room\r\n";
+
+				action = presence.getFrom().getResourceOrNull() + " entered the room\r\n";
 				break;
 			}
 			case unavailable:

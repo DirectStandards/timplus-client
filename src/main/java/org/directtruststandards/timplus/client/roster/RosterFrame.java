@@ -66,7 +66,9 @@ import org.jivesoftware.smack.sasl.SASLErrorException;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration.Builder;
-import org.jivesoftware.smackx.muc.MultiUserChat;
+import org.jivesoftware.smackx.muc.MultiUserChatManager;
+import org.jivesoftware.smackx.muc.RoomInfo;
+import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.Jid;
 
 public class RosterFrame extends JFrame
@@ -341,6 +343,14 @@ public class RosterFrame extends JFrame
 			}
 		});
 		
+		groupChatList.addMouseListener(new MouseAdapter()
+		{
+			public void mousePressed(MouseEvent e)
+			{
+				groupChatListMousePress(e);
+			}
+		});
+		
 	}
 	
 	@Override
@@ -512,6 +522,7 @@ public class RosterFrame extends JFrame
 			
 			// init the incoming file transfer manager
 			IncomingFileTransferManager.getInstance(con, this).setConnection(con);
+			
 			
 		}
 		catch (Exception e)
@@ -695,6 +706,7 @@ public class RosterFrame extends JFrame
 		contactsList.updateUI();
 	}
 	
+	
 	protected void contactPresenseUpdated(Presence pres)
 	{
 		final Jid from = pres.getFrom();
@@ -769,6 +781,50 @@ public class RosterFrame extends JFrame
 		}
 	}
 	
+	protected void groupChatListMousePress(MouseEvent e)
+	{
+	    Point pt = e.getPoint();
+	    int clickedRow = contactsList.rowAtPoint(pt);
+		
+		if (e.getButton() == MouseEvent.BUTTON3)
+		{
+
+		}
+		else if (e.getButton() == MouseEvent.BUTTON1)
+		{
+			if (e.getClickCount() == 2 && clickedRow >= 0)
+			{
+				final GroupChatTableModel model = (GroupChatTableModel)this.groupChatList.getModel();
+				final GroupChatItem item = (GroupChatItem)model.getValueAt(clickedRow, 0);
+				
+				// check to see if we are still a member
+				try 
+				{
+					final RoomInfo roomInfo = MultiUserChatManager.getInstanceFor(con).getRoomInfo(item.getRoom().getRoom());
+					if (roomInfo == null)
+					{
+						JOptionPane.showMessageDialog(this,"This group chat room no longer exists.", 
+					 		    "Group Chat", JOptionPane.WARNING_MESSAGE );
+						model.removeRow(clickedRow);
+						
+						return;
+					}
+				}
+				catch (Exception e2)
+				{
+					JOptionPane.showMessageDialog(this,"This group chat room no longer exists.", 
+				 		    "Group Chat", JOptionPane.WARNING_MESSAGE );
+					// most likely caused by an "item-not-found" error
+					model.removeRow(clickedRow);
+					
+					return;
+				}
+				
+				rejoinRoom(item.getRoom().getRoom());
+			}
+		}
+	}
+	
 	protected class GroupChatListener implements GroupChatEventListener
 	{
 		public GroupChatListener()
@@ -790,7 +846,19 @@ public class RosterFrame extends JFrame
 						final GroupChatItem item = (GroupChatItem)model.getValueAt(i, 1);
 						if (item.getRoom().getRoom().equals(event.getRoom().getRoom()) )
 						{
-							model.removeRow(i);
+							// check to see if we are still a member
+							try 
+							{
+								final RoomInfo roomInfo = MultiUserChatManager.getInstanceFor(con).getRoomInfo(event.getRoom().getRoom());
+								if (roomInfo == null)
+									model.removeRow(i);
+							}
+							catch (Exception e)
+							{
+								// most likely caused by an "item-not-found" error
+								model.removeRow(i);
+							}
+							
 							break;
 						}
 					}	
@@ -798,7 +866,14 @@ public class RosterFrame extends JFrame
 				}
 				case ROOM_ENTER:
 				{
-
+					// make sure it the room doesn't already exist in the list
+					for (int i = 0; i < model.getRowCount(); ++i)
+					{
+						final GroupChatItem item = (GroupChatItem)model.getValueAt(i, 1);
+						if (item.getRoom().getRoom().equals(event.getRoom().getRoom()) )
+							return;
+					}
+					
 					final GroupChatItem item = new GroupChatItem();
 					item.setRoom(event.getRoom());
 
@@ -812,5 +887,10 @@ public class RosterFrame extends JFrame
 					break;
 			}
 		}	
+	}
+	
+	protected void rejoinRoom(EntityBareJid roomJid)
+	{
+		GroupChatManager.getInstance(con).reEnterGroupChat(roomJid);
 	}
 }

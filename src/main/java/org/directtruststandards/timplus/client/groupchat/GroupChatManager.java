@@ -23,6 +23,7 @@ import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.muc.MultiUserChat.MucCreateConfigFormHandle;
 import org.jivesoftware.smackx.muc.packet.MUCUser.Invite;
 import org.jxmpp.jid.DomainBareJid;
+import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.EntityJid;
 import org.jxmpp.jid.Jid;
 import org.jxmpp.jid.impl.JidCreate;
@@ -120,36 +121,70 @@ public class GroupChatManager
 	{
 		MultiUserChat retVal = null;
 		
+		final String roomName = UUID.randomUUID().toString() + "@" + defaultGroupChatDomain.toString();
+
 		try
 		{
-			final String roomName = UUID.randomUUID().toString() + "@" + defaultGroupChatDomain.toString();
-			
 			retVal = roomManager.getMultiUserChat(JidCreate.entityBareFrom(roomName));
 			
-			final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
-			
-			final MucEnterConfiguration mucConfig = retVal.getEnterConfigurationBuilder(nickname).build();
-			
-			final MucCreateConfigFormHandle createConfig = retVal.createOrJoin(mucConfig);
-			
-			if (createConfig == null)
-			{
-				JOptionPane.showMessageDialog(null, "An error occured creating the group chat room.", 
-			 		    "Group chat failure", JOptionPane.ERROR_MESSAGE );
-				return null;
-			}
-			createConfig.makeInstant();
-			
-			createChatDialog(retVal);
+			joinRoom(retVal);
 			
 			return retVal;
+			
 		}
 		catch (Exception e)
+		{			
+			return null;
+		}
+	}
+	
+	protected void joinRoom(MultiUserChat room) throws Exception
+	{
+		final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
+		
+		final MucEnterConfiguration mucConfig = room.getEnterConfigurationBuilder(nickname).build();
+		
+		final MucCreateConfigFormHandle createConfig = room.createOrJoin(mucConfig);
+		
+		if (createConfig == null)
 		{
 			JOptionPane.showMessageDialog(null, "An error occured creating the group chat room.", 
 		 		    "Group chat failure", JOptionPane.ERROR_MESSAGE );
+			throw new RuntimeException();
+		}
+		createConfig.makeInstant();
+		
+		createChatDialog(room);
+	}
+	
+	public void reEnterGroupChat(EntityBareJid jid)
+	{
+		final MultiUserChat room  = roomManager.getMultiUserChat(jid);
+		
+		final GroupChatDialog diag = activeChats.get(jid);
+		if (diag != null)
+		{
+			EventQueue.invokeLater(() ->
+			{
+				diag.toFront();
+				diag.repaint();
+			});
+			return;
+		}
+
+		try
+		{
+			final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
 			
-			return null;
+			room.join(nickname);
+			
+			createChatDialog(room);
+		}
+		catch (Exception e)
+		{
+			JOptionPane.showMessageDialog(null, "An error occured re-joining the group chat room.", 
+		 		    "Group chat failure", JOptionPane.ERROR_MESSAGE );
+			throw new RuntimeException();
 		}
 	}
 	
@@ -173,16 +208,6 @@ public class GroupChatManager
 			
 			if (selection == JOptionPane.NO_OPTION)
 				return;	
-			
-			if (room.isJoined())
-			{
-				final GroupChatDialog diag = activeChats.get(room.getRoom());   
-				EventQueue.invokeLater(() ->
-				{
-					diag.toFront();
-					diag.repaint();
-				});
-			}
 			
 			final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
 			
@@ -261,4 +286,5 @@ public class GroupChatManager
 			catch (Exception e) {}
 		}
 	}
+	
 }
