@@ -41,7 +41,7 @@ public class ConfigurationDialog extends JDialog
 		this.setModal(true);
 		this.setResizable(false);
 		
-		setSize(300, 200);
+		setSize(300, 250);
 		
 		Point pt = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
 		
@@ -90,8 +90,6 @@ public class ConfigurationDialog extends JDialog
 		userPanel.add(usernameText);
 		serverConfigPanel.add(userPanel);
 		
-		getContentPane().add(serverConfigPanel, BorderLayout.NORTH);
-		
 		/*
 		 * Password
 		 */
@@ -124,7 +122,7 @@ public class ConfigurationDialog extends JDialog
 		serverPanel.add(severText);
 		serverConfigPanel.add(serverPanel);		
 		
-		getContentPane().add(serverConfigPanel, BorderLayout.NORTH);
+		getContentPane().add(serverConfigPanel, BorderLayout.CENTER);
 		
 		/*
 		 * Buttons

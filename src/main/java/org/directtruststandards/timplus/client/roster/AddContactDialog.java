@@ -40,7 +40,7 @@ public class AddContactDialog extends JDialog
 		this.setModal(true);
 		this.setResizable(false);
 		
-		setSize(320, 140);
+		setSize(320, 170);
 		
 		Point pt = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
 		
@@ -84,7 +84,7 @@ public class AddContactDialog extends JDialog
 		aliasPanel.add(aliasText);
 		contactPanel.add(aliasPanel);
 		
-		getContentPane().add(contactPanel, BorderLayout.NORTH);
+		getContentPane().add(contactPanel, BorderLayout.CENTER);
 		
 		/*
 		 * Buttons
