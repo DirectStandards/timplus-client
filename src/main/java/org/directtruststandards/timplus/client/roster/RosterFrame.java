@@ -12,9 +12,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.net.InetAddress;
 import java.net.URL;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -22,9 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.imageio.ImageIO;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -39,11 +34,11 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 
-
-import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.chat.SingleChatManager;
 import org.directtruststandards.timplus.client.config.Configuration;
 import org.directtruststandards.timplus.client.config.ConfigurationManager;
+import org.directtruststandards.timplus.client.connection.ConnectionListener;
+import org.directtruststandards.timplus.client.connection.ConnectionManager;
 import org.directtruststandards.timplus.client.filetransport.IncomingFileTransferManager;
 import org.directtruststandards.timplus.client.groupchat.GroupChatEvent;
 import org.directtruststandards.timplus.client.groupchat.GroupChatEventListener;
@@ -53,9 +48,7 @@ import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
 import org.directtruststandards.timplus.client.vcard.VCardManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
-import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.SmackException.ConnectionException;
-import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.XMPPException.StreamErrorException;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.Roster;
@@ -63,15 +56,12 @@ import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.Roster.SubscriptionMode;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.sasl.SASLErrorException;
-import org.jivesoftware.smack.tcp.XMPPTCPConnection;
-import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
-import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration.Builder;
 import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.muc.RoomInfo;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.Jid;
 
-public class RosterFrame extends JFrame
+public class RosterFrame extends JFrame implements ConnectionListener
 {
 	
 	private static final long serialVersionUID = -5862072428442358408L;
@@ -82,9 +72,15 @@ public class RosterFrame extends JFrame
 	
 	protected JLabel connected;
 	
+	protected JLabel connecting;
+	
 	protected JLabel disconnected;
 	
 	protected JLabel connectStatusLabel;
+	
+	protected JMenu contactsMenu;
+	
+	protected JMenu groupChatMenu;
 	
 	protected ExecutorService connectionExecutor;
 	
@@ -95,6 +91,8 @@ public class RosterFrame extends JFrame
 	protected JPopupMenu contactPopup;
 	
 	protected GroupChatListener groupChatListener;
+	
+	protected ExecutorService reconnectExecutorService;
 	
 	public RosterFrame()
 	{
@@ -174,12 +172,20 @@ public class RosterFrame extends JFrame
 		icon = new ImageIcon(new ImageIcon(image).getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH));
 		disconnected = new JLabel(icon);
 		
+		imageURL = this.getClass().getResource("/images/connecting.png");
+		image = ImageIO.read(imageURL);
+		icon = new ImageIcon(new ImageIcon(image).getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH));
+		connecting = new JLabel(icon);
+		
 
 		connectStatusLabel = new JLabel("Connecting...");
 		
 		
 		connected.setVisible(false);
+		disconnected.setVisible(false);
+		connecting.setVisible(true);
 		connectionPanel.add(connected);
+		connectionPanel.add(connecting);
 		connectionPanel.add(disconnected);
 		connectionPanel.add(connectStatusLabel);
 		
@@ -236,8 +242,7 @@ public class RosterFrame extends JFrame
 		 */
 		final JMenuBar menuBar = new JMenuBar();
 		
-		
-		final JMenu contactsMenu = new JMenu("Contacts");
+		contactsMenu = new JMenu("Contacts");
 		final JMenuItem addContact = new JMenuItem("Add Contact...");
 		addContact.addActionListener(new ActionListener()
 		{
@@ -248,8 +253,9 @@ public class RosterFrame extends JFrame
 			}	
 		});
 		contactsMenu.add(addContact);
+		contactsMenu.setEnabled(false);
 		
-		final JMenu groupChatMenu = new JMenu("Group Chat");
+		groupChatMenu = new JMenu("Group Chat");
 		final JMenuItem newChatRoom = new JMenuItem("New Chat Room");
 		newChatRoom.addActionListener(new ActionListener()
 		{
@@ -260,6 +266,7 @@ public class RosterFrame extends JFrame
 			}	
 		});
 		groupChatMenu.add(newChatRoom);
+		groupChatMenu.setEnabled(false);
 		
 		
 		final JMenu accountMenu = new JMenu("Account");
@@ -378,14 +385,10 @@ public class RosterFrame extends JFrame
 		
 		super.setVisible(visible);
 		
-		connectionExecutor.execute(new Runnable()
-		{
-			@Override
-			public void run()
-			{
-				connect();
-			}
-		});
+		final ConnectionManager conManager = ConnectionManager.getInstance();
+		conManager.addConnectionListener(this);
+		conManager.connect();
+		
 	}
 	
 	protected void configure()
@@ -393,164 +396,118 @@ public class RosterFrame extends JFrame
 		ConfigurationManager.getInstance().doConfigure(this);
 	}
 	
-	protected void connect()
+	@Override
+	public void onConnected(AbstractXMPPConnection con)
 	{
-		final Configuration config = ConfigurationManager.getInstance().getConfiguration();
-		
-		try
+		EventQueue.invokeLater(() ->
 		{
-			final Builder conBuilder = XMPPTCPConnectionConfiguration.builder().setUsernameAndPassword(config.getUsername(), config.getPassword())
-					.setXmppDomain(config.getDomain())
-					.setCompressionEnabled(true);
-	        
-			TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() 
-	        {
-	            public java.security.cert.X509Certificate[] getAcceptedIssuers() 
-	            {
-	                return null;
-	            }
-	            
-	            public void checkClientTrusted(X509Certificate[] certs, String authType) 
-	            {
-	            }
-	            
-	            public void checkServerTrusted(X509Certificate[] certs, String authType) 
-	            {
-	            }
-	        }};
-	        
-	        final SSLContext sc = SSLContext.getInstance("TLSv1.2");
-	        sc.init(null, trustAllCerts, new java.security.SecureRandom());
-	        
-	        conBuilder.setCustomSSLContext(sc);
-	        
-			if (!StringUtils.isEmpty(config.getServer()))
-				conBuilder.setHostAddress(InetAddress.getByName(config.getServer()));
-	        
-			XMPPTCPConnectionConfiguration xmppConfig = conBuilder.build();
-			
-			con = new XMPPTCPConnection(xmppConfig);
-			con.addConnectionListener(new ConnectionListener()
-			{
-				@Override
-				public void connected(XMPPConnection connection)
-				{
-					
-				}
-
-				@Override
-				public void authenticated(XMPPConnection connection, boolean resumed)
-				{
-					
-				}
-
-				@Override
-				public void connectionClosed()
-				{
-					
-				}
-
-				@Override
-				public void connectionClosedOnError(Exception e)
-				{
-					/*
-					 * for now just close and reconnect
-					 */
-					try
-					{
-						if (con != null && con.isConnected())
-							con.disconnect();
-					}
-					catch (Exception conExp)
-					{
-						/* no op */
-					}
-
-					System.out.println("Connection was closed.  Reconnecting");
-					try
-					{
-						connect();
-					}
-					catch(Exception conExp)
-					{
-						
-					}
-		
-				}
-				
-				
-			});
-			
-			con.connect();
-			
-			con.login();
-			
 			connectStatusLabel.setText("Connected");
 			connected.setVisible(true);
 			disconnected.setVisible(false);
-			
-			/*
-			 * Load the roster 
-			 */
-			roster = Roster.getInstanceFor(con);
-			roster.setSubscriptionMode(SubscriptionMode.accept_all);
-			
-	    	loadRoster();
-			
-	    	roster.addRosterListener(new RosterListener() 
-	    	{
-	    		public void entriesAdded(Collection<Jid> addresses) {}
-	    		public void entriesDeleted(Collection<Jid> addresses) {}
-	    		public void entriesUpdated(Collection<Jid> addresses) {}
-	    		public void presenceChanged(Presence presence) 
-	    		{
-	    			contactPresenseUpdated(presence);
-	    			
-	    		}
-	    	});
-	    	
-			Presence pres = new Presence(Presence.Type.available);
-			pres.setStatus("Available");
-			con.sendStanza(pres);
-			
-			// init the chat manager
-			SingleChatManager.getInstance(con).setConnection(con);
-			
-			// init the group chat manager
-			GroupChatManager.getInstance(con).setConnection(con);
-			GroupChatManager.getInstance(con).registerGroupChatEventListener(groupChatListener);
-			
-			// init the incoming file transfer manager
-			IncomingFileTransferManager.getInstance(con, this).setConnection(con);
-			
-			
-		}
-		catch (Exception e)
+			connecting.setVisible(false);
+			contactsMenu.setEnabled(true);
+			groupChatMenu.setEnabled(true);
+		});
+		
+		/*
+		 * Load the roster 
+		 */
+		roster = Roster.getInstanceFor(con);
+		roster.setSubscriptionMode(SubscriptionMode.accept_all);
+		
+    	loadRoster();
+		
+    	roster.addRosterListener(new RosterListener() 
+    	{
+    		public void entriesAdded(Collection<Jid> addresses) {}
+    		public void entriesDeleted(Collection<Jid> addresses) {}
+    		public void entriesUpdated(Collection<Jid> addresses) {}
+    		public void presenceChanged(Presence presence) 
+    		{
+    			contactPresenseUpdated(presence);
+    			
+    		}
+    	});
+    	
+		Presence pres = new Presence(Presence.Type.available);
+		pres.setStatus("Available");
+		try 
 		{
-			final StringBuilder status = new StringBuilder("Connection failed: ");
-			if (e instanceof SASLErrorException)
-			{
-				final SASLErrorException error = (SASLErrorException)e;
-				status.append(error.getSASLFailure().getSASLErrorString());
-			}
-			else if (e instanceof ConnectionException)
-			{
-				status.append("network error");
-			}
-			else if (e instanceof StreamErrorException)
-			{
-				final StreamErrorException error = (StreamErrorException)e;
-				status.append(error.getStreamError().getCondition().toString());
-			}
-			else
-				status.append("unknown error");
-			
+			con.sendStanza(pres);
+		}
+		catch (Exception e) {}
+		
+		// init the chat manager
+		SingleChatManager.getInstance(con).setConnection(con);
+		
+		// init the group chat manager
+		GroupChatManager.getInstance(con).setConnection(con);
+		GroupChatManager.getInstance(con).registerGroupChatEventListener(groupChatListener);
+		
+		// init the incoming file transfer manager
+		IncomingFileTransferManager.getInstance(con, this).setConnection(con);
+				
+	}
+	
+	@Override
+	public void onConnecting()
+	{
+		EventQueue.invokeLater(() ->
+		{
+			connectStatusLabel.setText("Connecting");
+			connected.setVisible(false);
+			disconnected.setVisible(false);
+			connecting.setVisible(true);
+		});
+	}
+	
+	@Override
+	public void onDisconnectedWithError(Exception e)
+	{
+		contactsList.setModel(new GroupChatTableModel(new ArrayList<>()));
+		
+		final StringBuilder status = new StringBuilder("Connection failed: ");
+		if (e instanceof SASLErrorException)
+		{
+			final SASLErrorException error = (SASLErrorException)e;
+			status.append(error.getSASLFailure().getSASLErrorString());
+		}
+		else if (e instanceof ConnectionException)
+		{
+			status.append("network error");
+		}
+		else if (e instanceof StreamErrorException)
+		{
+			final StreamErrorException error = (StreamErrorException)e;
+			status.append(error.getStreamError().getCondition().toString());
+		}
+		else
+			status.append("unknown error");
+		
+		EventQueue.invokeLater(() ->
+		{
 			connectStatusLabel.setText(status.toString());
 			connected.setVisible(false);
 			disconnected.setVisible(true);
-			
-		}
-		
+			connecting.setVisible(false);
+			contactsMenu.setEnabled(false);
+			groupChatMenu.setEnabled(false);
+		});
+	}
+	
+	@Override
+	public void onDiconneected()
+	{
+		contactsList.setModel(new GroupChatTableModel(new ArrayList<>()));
+		EventQueue.invokeLater(() ->
+		{
+			connectStatusLabel.setText("Disconnected");
+			connected.setVisible(false);
+			disconnected.setVisible(true);
+			connecting.setVisible(false);
+			contactsMenu.setEnabled(false);
+			groupChatMenu.setEnabled(false);
+		});
 	}
 	
 	protected void modifyAccount()
@@ -560,6 +517,14 @@ public class RosterFrame extends JFrame
 		configure();
 		
 		final Configuration newConfig = ConfigurationManager.getInstance().getConfiguration();
+		
+		if (oldConfig.getDomain().trim().compareToIgnoreCase(newConfig.getDomain().trim()) != 0 || oldConfig.getUsername().trim().compareToIgnoreCase(newConfig.getUsername().trim()) != 0 ||
+				oldConfig.getPassword().trim().compareToIgnoreCase(newConfig.getPassword().trim()) != 0 || oldConfig.getServer().trim().compareToIgnoreCase(newConfig.getServer().trim()) != 0)
+		{
+			ConnectionManager.getInstance().disconnect();
+			
+			ConnectionManager.getInstance().connect();
+		}
 	}
 	
 	protected void addContact()

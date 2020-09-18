@@ -312,7 +312,11 @@ public class GroupChatDialog extends JDialog
 	    			doc.insertString(doc.getLength(), builder.toString(), red);
 	    			doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
     			}
-    			catch (Exception e) {}
+    			catch (Exception e) 
+    			{
+    				e.printStackTrace();
+    			}
+            	
             }
         });
 
