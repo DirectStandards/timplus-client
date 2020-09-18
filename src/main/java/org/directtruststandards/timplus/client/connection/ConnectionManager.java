@@ -8,6 +8,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -234,8 +235,12 @@ public class ConnectionManager
 		{
 			while (true)
 			{
-				final ConRequest request = connectQueue.poll();
-
+				ConRequest request = null;
+				try 
+				{
+					request = connectQueue.poll(10, TimeUnit.SECONDS);
+				}
+				catch (Exception e) {}
 				if (request == ConRequest.CONNECT)
 				{
 					AbstractXMPPConnection con = doConnect();				
