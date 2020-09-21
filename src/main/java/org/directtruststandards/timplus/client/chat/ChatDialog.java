@@ -34,9 +34,13 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
+import javax.swing.text.EditorKit;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
 
 import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.filetransport.OutgoingFileTransferDialog;
@@ -49,6 +53,7 @@ import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
+import org.jivesoftware.smackx.xhtmlim.packet.XHTMLExtension;
 import org.jxmpp.jid.EntityFullJid;
 import org.jxmpp.jid.Jid;
 
@@ -107,6 +112,8 @@ public class ChatDialog extends JDialog
 		 */
 		chatText = new JTextPane();
 		chatText.setEditable(false);
+		chatText.setEditorKit(new HTMLEditorKit());
+		chatText.setDocument(new HTMLDocument());
 		
 		textScrollPane = new JScrollPane(chatText);
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -208,7 +215,7 @@ public class ChatDialog extends JDialog
 	public void onIncomingMessage(Message msg)
 	{
 		final StyledDocument doc = chatText.getStyledDocument();
-		
+		final EditorKit editKit = chatText.getEditorKit();
 		// check to see if this is a delayed message
 	    final DelayInformation delay = (DelayInformation)msg.getExtension(DelayInformation.NAMESPACE);
 		
@@ -250,7 +257,23 @@ public class ChatDialog extends JDialog
 		    			StyleConstants.setItalic(red, true);
 		    			
 		    			doc.insertString(doc.getLength(), builder.toString(), red);
-		    			doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
+		    			if (!(editKit instanceof HTMLEditorKit && doc instanceof HTMLDocument))
+		    				doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
+		    			else
+		    			{
+		    				// check if there is alternative text
+		    				final XHTMLExtension htmlBody = (XHTMLExtension)msg.getExtension(XHTMLExtension.NAMESPACE);
+		    				if (htmlBody != null)
+		    				{
+		    					final HTMLEditorKit htmlKit = (HTMLEditorKit)editKit;
+		    					for (CharSequence seq : htmlBody.getBodies())
+		    					{
+		    						htmlKit.insertHTML((HTMLDocument)doc, doc.getLength(), seq.toString(), 0, 0, null);
+		    					}
+		    				}
+		    				else
+		    					doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
+		    			}
 	    			}
 	    			catch (Exception e) {}
             	}
