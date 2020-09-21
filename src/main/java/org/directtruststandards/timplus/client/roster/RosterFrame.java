@@ -426,7 +426,7 @@ public class RosterFrame extends JFrame implements ConnectionListener
 		
 		EventQueue.invokeLater(() ->
 		{
-			connectStatusLabel.setText("Connected");
+			connectStatusLabel.setText("Connected - " + con.getUser().asEntityBareJidString());
 			connected.setVisible(true);
 			disconnected.setVisible(false);
 			connecting.setVisible(false);
