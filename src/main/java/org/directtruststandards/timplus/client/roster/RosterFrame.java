@@ -399,6 +399,8 @@ public class RosterFrame extends JFrame implements ConnectionListener
 	@Override
 	public void onConnected(AbstractXMPPConnection con)
 	{
+		this.con = con;
+		
 		EventQueue.invokeLater(() ->
 		{
 			connectStatusLabel.setText("Connected");
