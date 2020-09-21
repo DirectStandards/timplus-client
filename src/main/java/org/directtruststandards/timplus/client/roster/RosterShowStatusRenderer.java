@@ -11,13 +11,13 @@ import java.net.URL;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JTable;
-import javax.swing.table.TableCellRenderer;
+import javax.swing.ListCellRenderer;
 
-
-public class RosterItemRenderer implements TableCellRenderer
+public class RosterShowStatusRenderer implements ListCellRenderer<RosterStatusShow>
 {
+
 	static ImageIcon ONLINE;
 	
 	static ImageIcon AWAY;
@@ -25,8 +25,6 @@ public class RosterItemRenderer implements TableCellRenderer
 	static ImageIcon OFFLINE;
 	
 	static ImageIcon DND;
-	
-	static ImageIcon UNAUTHORIZED;
 	
 	protected JLabel displayLabel;
 	
@@ -53,22 +51,17 @@ public class RosterItemRenderer implements TableCellRenderer
 			imageURL = RosterItemRenderer.class.getResource("/images/dnd.png");
 			image = ImageIO.read(imageURL);
 			DND = new ImageIcon(new ImageIcon(image).getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH));
-			
-			imageURL = RosterItemRenderer.class.getResource("/images/unauthorized.png");
-			image = ImageIO.read(imageURL);
-			UNAUTHORIZED = new ImageIcon(new ImageIcon(image).getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH));
 		}
 		catch (IOException e)
 		{
 			ONLINE = null;
 			AWAY = null;
 			OFFLINE = null;
-			UNAUTHORIZED = null;
 			DND = null;
 		}
 	}
 	
-	public RosterItemRenderer()
+	public RosterShowStatusRenderer()
 	{
 		presLabel = new JLabel();
 		displayLabel = new JLabel();
@@ -84,10 +77,10 @@ public class RosterItemRenderer implements TableCellRenderer
 		renderPanel.add(presLabel, BorderLayout.WEST);
 		renderPanel.add(displayLabel, BorderLayout.CENTER);
 	}
-
+	
 	@Override
-	public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
-			int row, int column)
+	public Component getListCellRendererComponent(JList<? extends RosterStatusShow> list, RosterStatusShow value,
+			int index, boolean isSelected, boolean cellHasFocus)
 	{
 		if (value == null)
 		{
@@ -95,16 +88,11 @@ public class RosterItemRenderer implements TableCellRenderer
 			displayLabel.setText("");
 		}
 		else
-		{
-			final RosterItem item = (RosterItem)value;
-			
-			switch(item.getPresence())
+		{			
+			switch(value)
 			{
 				case AVAILABLE:
 					presLabel.setIcon(ONLINE);
-					break;
-				case UNAVAILABLE:
-					presLabel.setIcon(OFFLINE);
 					break;
 				case AWAY:
 					presLabel.setIcon(AWAY);
@@ -112,14 +100,12 @@ public class RosterItemRenderer implements TableCellRenderer
 				case DND:
 					presLabel.setIcon(DND);
 					break;							
-				case NOT_AUTHORIZED:
-					presLabel.setIcon(UNAUTHORIZED);
-					break;					
-				default:
+				case PRIVATE:
 					presLabel.setIcon(OFFLINE);
+					break;					
 			}
 			
-			displayLabel.setText(item.getRosterJID().asBareJid().toString());
+			displayLabel.setText(value.getDisplay());
 		}
 		
 		return renderPanel;

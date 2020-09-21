@@ -5,6 +5,7 @@ import java.awt.BorderLayout;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.GraphicsEnvironment;
+import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
@@ -21,6 +22,7 @@ import java.util.concurrent.Executors;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
+import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
@@ -81,6 +83,8 @@ public class RosterFrame extends JFrame implements ConnectionListener
 	protected JMenu contactsMenu;
 	
 	protected JMenu groupChatMenu;
+	
+	protected JComboBox<RosterStatusShow> showDropDown;
 	
 	protected ExecutorService connectionExecutor;
 	
@@ -159,8 +163,9 @@ public class RosterFrame extends JFrame implements ConnectionListener
 		/*
 		 * Status 
 		 */
-		final JPanel statusPanel = new JPanel(new BorderLayout());
+		final JPanel statusPanel = new JPanel(new GridLayout(2,1));
 		
+		// connection
 		final JPanel connectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		URL imageURL = this.getClass().getResource("/images/connected.png");
 		BufferedImage image = ImageIO.read(imageURL);
@@ -181,16 +186,25 @@ public class RosterFrame extends JFrame implements ConnectionListener
 		connectStatusLabel = new JLabel("Connecting...");
 		
 		
+		// my status
+		final RosterStatusShow[] rosterShowItems = {RosterStatusShow.AVAILABLE, RosterStatusShow.AWAY, RosterStatusShow.DND, RosterStatusShow.PRIVATE};
+		showDropDown = new JComboBox<RosterStatusShow>(rosterShowItems);
+		showDropDown.setRenderer(new RosterShowStatusRenderer());
+		
+		
+		
 		connected.setVisible(false);
 		disconnected.setVisible(false);
 		connecting.setVisible(true);
+		showDropDown.setVisible(false);
 		connectionPanel.add(connected);
 		connectionPanel.add(connecting);
 		connectionPanel.add(disconnected);
 		connectionPanel.add(connectStatusLabel);
 		
 		
-		statusPanel.add(connectionPanel, BorderLayout.NORTH);
+		statusPanel.add(connectionPanel);
+		statusPanel.add(showDropDown);
 		
 		this.getContentPane().add(statusPanel, BorderLayout.SOUTH);
 		
@@ -358,6 +372,15 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			}
 		});
 		
+		showDropDown.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				onSelectShow();
+			}
+		});
+		
 	}
 	
 	@Override
@@ -409,6 +432,7 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			connecting.setVisible(false);
 			contactsMenu.setEnabled(true);
 			groupChatMenu.setEnabled(true);
+			showDropDown.setVisible(true);
 		});
 		
 		/*
@@ -460,6 +484,7 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			connected.setVisible(false);
 			disconnected.setVisible(false);
 			connecting.setVisible(true);
+			showDropDown.setVisible(false);
 		});
 	}
 	
@@ -494,6 +519,7 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			connecting.setVisible(false);
 			contactsMenu.setEnabled(false);
 			groupChatMenu.setEnabled(false);
+			showDropDown.setVisible(false);
 		});
 	}
 	
@@ -509,6 +535,7 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			connecting.setVisible(false);
 			contactsMenu.setEnabled(false);
 			groupChatMenu.setEnabled(false);
+			showDropDown.setVisible(false);
 		});
 	}
 	
@@ -617,6 +644,40 @@ public class RosterFrame extends JFrame implements ConnectionListener
 		manager.createGroupChat();
 	}
 	
+	protected void onSelectShow()
+	{	
+		final RosterStatusShow statusShow =  (RosterStatusShow)showDropDown.getSelectedItem();
+		if (statusShow != null && con != null)
+		{
+			Presence pres = null;
+			switch (statusShow)
+			{
+				case AVAILABLE:
+					pres = new Presence(Presence.Type.available);
+					break;
+				case AWAY:
+					pres = new Presence(Presence.Type.available);
+					pres.setMode(Presence.Mode.away);
+					break;
+				case DND:
+					pres = new Presence(Presence.Type.available);
+					pres.setMode(Presence.Mode.dnd);					
+					break;
+				case PRIVATE:
+					pres = new Presence(Presence.Type.unavailable);	
+					break;					
+			}
+			
+			try
+			{
+				con.sendStanza(pres);
+			}
+			catch (Exception e)
+			{
+			}
+		}
+	}
+	
 	protected void sendSubscriptionRequest()
 	{
 		int idx = contactsList.getSelectedRow();
@@ -685,9 +746,25 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			{
 				final RosterItem rosterItem = (RosterItem)contactsList.getModel().getValueAt(i, 0);
 				
-				if (pres.getType() == Presence.Type.available)
+				if (pres.getType() == null || pres.getType() == Presence.Type.available)
 				{
-					rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
+					switch (pres.getMode())
+					{
+						case available:
+						case chat:
+							rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
+							break;
+						case away:
+						case xa:
+							rosterItem.setPresence(RosterItem.Presense.AWAY);
+							break;
+						case dnd:
+							rosterItem.setPresence(RosterItem.Presense.DND);
+							break;		
+						default:
+							rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
+							break;
+					}
 					contactsList.getModel().setValueAt(rosterItem, i, 0);
 				}
 				else if (pres.getType() == Presence.Type.unavailable)
