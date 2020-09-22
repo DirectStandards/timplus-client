@@ -279,6 +279,8 @@ public class ChatDialog extends JDialog
 			public void windowClosed(WindowEvent e)
 			{
 				runChatStateThread.set(false);
+				activityQueue.offer(ChatState.gone);
+				typingChatExecutor.shutdown();
 			}
 			
 		});
