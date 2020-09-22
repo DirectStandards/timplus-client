@@ -56,6 +56,7 @@ public class ConnectionManager
 		
 		this.connectQueue = new LinkedBlockingQueue<>();
 		
+		System.out.println("Starting up connection manager thread.");
 		connectionMonitorExecutor.execute(new ConnectionOperator());
 	}
 	
@@ -107,8 +108,14 @@ public class ConnectionManager
 			catch (Exception e) {}
 		}
 		
-
+		System.out.println("Getting connection configuration.");
 		final Configuration config = ConfigurationManager.getInstance().getConfiguration();
+		System.out.println("\tDomain: " + config.getDomain());
+		System.out.println("\tUsername: " + config.getUsername());
+		if (StringUtils.isEmpty(config.getServer()))
+			System.out.println("\tServer: Looking up from DNS SRV");
+		else
+			System.out.println("\tServer: " + config.getServer());
 		
 		try
 		{
@@ -195,8 +202,10 @@ public class ConnectionManager
 				
 			});
 			
+			System.out.println("Making conenction to server.");
 			con.connect();
 			
+			System.out.println("Connection successful.  Attempting to log in.");
 			con.login();
 			
 			for (org.directtruststandards.timplus.client.connection.ConnectionListener listener : connectionListeners)
@@ -207,9 +216,13 @@ public class ConnectionManager
 				}
 				catch (Exception e2) {}
 			}
+			
+			System.out.println("Successfully connected and authenticated to server.");
 		}
 		catch (Exception e)
 		{
+			System.out.println("Connection or authentication failed: " + e.getMessage());
+			
 			for (org.directtruststandards.timplus.client.connection.ConnectionListener listener : connectionListeners)
 			{
 				try
@@ -233,16 +246,19 @@ public class ConnectionManager
 		@Override
 		public void run()
 		{
+			System.out.println("Connection manager thread is running.");
 			while (true)
 			{
 				ConRequest request = null;
 				try 
 				{
+					System.out.println("Looking for connection work in connection queue.");
 					request = connectQueue.poll(10, TimeUnit.SECONDS);
 				}
 				catch (Exception e) {}
 				if (request == ConRequest.CONNECT)
 				{
+					System.out.println("Attempting to connect...");
 					AbstractXMPPConnection con = doConnect();				
 					
 					while (con == null || !con.isConnected())
@@ -261,13 +277,19 @@ public class ConnectionManager
 						if (connectQueue.peek() != null)
 							break;
 						
+						System.out.println("Attempting to connect...");
 						con = doConnect();
 					}
 				}
 				else if (request == ConRequest.DISCONNECT)
 				{
+					System.out.println("Disconnecting.");
 					if (con != null && con.isConnected())
 						con.disconnect();
+				}
+				else
+				{
+					System.out.println("No connection work found.");
 				}
 			}
 		}

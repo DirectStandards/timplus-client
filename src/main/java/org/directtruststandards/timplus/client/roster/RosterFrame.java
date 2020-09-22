@@ -406,6 +406,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		
 		super.setVisible(visible);
 		
+		System.out.println("Starting connection manager and attempting to connect.");
 		final ConnectionManager conManager = ConnectionManager.getInstance();
 		conManager.addConnectionListener(this);
 		conManager.connect();
