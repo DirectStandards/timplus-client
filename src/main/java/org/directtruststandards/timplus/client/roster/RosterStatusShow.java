@@ -12,7 +12,7 @@ public enum RosterStatusShow
 	
 	protected final String display;
 	
-	private  RosterStatusShow(String display)
+	private RosterStatusShow(String display)
 	{
 		this.display = display;
 	}

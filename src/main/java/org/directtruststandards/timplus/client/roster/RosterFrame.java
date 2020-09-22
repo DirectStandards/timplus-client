@@ -53,6 +53,7 @@ import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.SmackException.ConnectionException;
 import org.jivesoftware.smack.XMPPException.StreamErrorException;
 import org.jivesoftware.smack.packet.Presence;
+import org.jivesoftware.smack.packet.Presence.Mode;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.Roster.SubscriptionMode;
@@ -63,7 +64,7 @@ import org.jivesoftware.smackx.muc.RoomInfo;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.Jid;
 
-public class RosterFrame extends JFrame implements ConnectionListener
+public class RosterFrame extends JFrame implements ConnectionListener, UserActivityListener
 {
 	
 	private static final long serialVersionUID = -5862072428442358408L;
@@ -121,6 +122,8 @@ public class RosterFrame extends JFrame implements ConnectionListener
 	    catch (Exception e) { e.printStackTrace();}
 	    
 	    connectionExecutor = Executors.newSingleThreadExecutor();
+	    
+	    UserActivityManager.getInstance().addUserActivityListener(this);
 	}
 	
 	protected void initUI() throws Exception
@@ -472,6 +475,9 @@ public class RosterFrame extends JFrame implements ConnectionListener
 		
 		// init the incoming file transfer manager
 		IncomingFileTransferManager.getInstance(con, this).setConnection(con);
+		
+		// start the user activity manager
+		UserActivityManager.getInstance().start();
 				
 	}
 	
@@ -521,6 +527,8 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			groupChatMenu.setEnabled(false);
 			showDropDown.setVisible(false);
 		});
+		
+		UserActivityManager.getInstance().stop();
 	}
 	
 	@Override
@@ -537,6 +545,8 @@ public class RosterFrame extends JFrame implements ConnectionListener
 			groupChatMenu.setEnabled(false);
 			showDropDown.setVisible(false);
 		});
+		
+		UserActivityManager.getInstance().stop();
 	}
 	
 	protected void modifyAccount()
@@ -936,5 +946,38 @@ public class RosterFrame extends JFrame implements ConnectionListener
 	protected void rejoinRoom(EntityBareJid roomJid)
 	{
 		GroupChatManager.getInstance(con).reEnterGroupChat(roomJid);
+	}
+
+	@Override
+	public void onUserActivityStateChange(Mode mode)
+	{
+		// make sure we're connected first
+		if (con != null && con.isConnected())
+		{
+			// get the current state from the drop down box
+			final RosterStatusShow show = (RosterStatusShow)showDropDown.getSelectedItem();
+			
+			// if the show status is "private" or "do not disturb", then don't do anything
+			if (show == RosterStatusShow.PRIVATE || show == RosterStatusShow.DND)
+				return;
+			
+			// if the mode and the show match, don't do anything
+			if ((show == RosterStatusShow.AVAILABLE && mode == Mode.available) || 
+			    (show == RosterStatusShow.AWAY && mode == Mode.away))
+				return;
+			
+			// now set the show status to either available or away
+			for (int idx = 0; idx < showDropDown.getItemCount(); ++idx)
+			{
+				final RosterStatusShow possibleShow = (RosterStatusShow)showDropDown.getItemAt(idx);
+				if ((possibleShow == RosterStatusShow.AVAILABLE && mode == Mode.available) ||
+					(possibleShow == RosterStatusShow.AWAY && mode == Mode.away))
+				{
+					showDropDown.setSelectedIndex(idx);
+					
+					break;
+				}
+			}
+		}
 	}
 }
