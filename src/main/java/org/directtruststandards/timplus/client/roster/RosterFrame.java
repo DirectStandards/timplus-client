@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
@@ -87,8 +86,6 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 	
 	protected JComboBox<RosterStatusShow> showDropDown;
 	
-	protected ExecutorService connectionExecutor;
-	
 	protected AbstractXMPPConnection con;
 	
 	protected Roster roster;
@@ -120,8 +117,6 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 	    	initUI();
 	    }
 	    catch (Exception e) { e.printStackTrace();}
-	    
-	    connectionExecutor = Executors.newSingleThreadExecutor();
 	    
 	    UserActivityManager.getInstance().addUserActivityListener(this);
 	}

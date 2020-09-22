@@ -1,7 +1,5 @@
 package org.directtruststandards.timplus.client;
 
-import java.awt.EventQueue;
-
 import org.directtruststandards.timplus.client.packets.CredRequest;
 import org.directtruststandards.timplus.client.packets.CredRequestProvider;
 import org.directtruststandards.timplus.client.roster.RosterFrame;
@@ -19,12 +17,7 @@ public class TIMPlusClientApplication
                 .headless(false).run(args);
 
     	final RosterFrame ex = new RosterFrame();
-        
-        EventQueue.invokeLater(() -> 
-        {
-            ex.setVisible(true);
-            
-            ProviderManager.addIQProvider(CredRequest.ELEMENT, CredRequest.NAMESPACE, new CredRequestProvider());
-        });
+    	ex.setVisible(true);
+    	ProviderManager.addIQProvider(CredRequest.ELEMENT, CredRequest.NAMESPACE, new CredRequestProvider());
     }
 }
