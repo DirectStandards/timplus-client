@@ -119,10 +119,12 @@ public class ConnectionManager
 		
 		try
 		{
+			System.out.println("Creating configuration builder.");
 			final Builder conBuilder = XMPPTCPConnectionConfiguration.builder().setUsernameAndPassword(config.getUsername(), config.getPassword())
 					.setXmppDomain(config.getDomain())
 					.setCompressionEnabled(true);
 	        
+			System.out.println("Creating trust manager.");
 			TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() 
 	        {
 	            public java.security.cert.X509Certificate[] getAcceptedIssuers() 
@@ -139,18 +141,22 @@ public class ConnectionManager
 	            }
 	        }};
 	        
+			System.out.println("Creating TLS context.");
 	        final SSLContext sc = SSLContext.getInstance("TLSv1.2");
 	        sc.init(null, trustAllCerts, new java.security.SecureRandom());
 	        
 	        conBuilder.setCustomSSLContext(sc);
 	        
+	        System.out.println("Checking resolution of server name (if set).");
 			if (!StringUtils.isEmpty(config.getServer()))
 				conBuilder.setHostAddress(InetAddress.getByName(config.getServer()));
 	        
+			System.out.println("Building the connection object.");
 			XMPPTCPConnectionConfiguration xmppConfig = conBuilder.build();
 			
 			con = new XMPPTCPConnection(xmppConfig);
 			
+			System.out.println("Adding connection listeners");
 			con.addConnectionListener(new ConnectionListener()
 			{
 				@Override
