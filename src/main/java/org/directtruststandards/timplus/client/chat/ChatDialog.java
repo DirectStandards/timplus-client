@@ -3,7 +3,9 @@ package org.directtruststandards.timplus.client.chat;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
@@ -15,6 +17,10 @@ import java.awt.dnd.DropTarget;
 import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -22,6 +28,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.AbstractAction;
@@ -29,6 +41,7 @@ import javax.swing.ActionMap;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JDialog;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -38,7 +51,7 @@ import javax.swing.text.EditorKit;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
-import javax.swing.text.html.HTML;
+
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 
@@ -52,6 +65,8 @@ import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smackx.chatstates.ChatState;
+import org.jivesoftware.smackx.chatstates.packet.ChatStateExtension;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
 import org.jivesoftware.smackx.xhtmlim.packet.XHTMLExtension;
 import org.jxmpp.jid.EntityFullJid;
@@ -65,6 +80,10 @@ public class ChatDialog extends JDialog
 	
 	private static final String INSERT_BREAK = "insert-break";
 	
+	protected ExecutorService typingChatExecutor;
+	
+	protected BlockingQueue<ChatState> activityQueue;
+	
 	protected AbstractXMPPConnection con;
 	
 	protected Jid contactJid;
@@ -77,15 +96,29 @@ public class ChatDialog extends JDialog
 	
 	protected Map<String, AtomicInteger> unackedMessages; 
 	
+	protected ChatState activeChatState;
+	
+	protected AtomicBoolean runChatStateThread;
+	
+	protected JLabel activityLabel;
+	
 	public ChatDialog(Jid contactJid, AbstractXMPPConnection con)
 	{
 		super((Frame)null, contactJid.toString());
 		
 		this.contactJid = contactJid;
-		
+
 		this.con = con;
 		
 		this.unackedMessages = new HashMap<>();
+		
+		this.typingChatExecutor = Executors.newSingleThreadExecutor();
+		
+		this.activeChatState = ChatState.active;
+		
+		this.runChatStateThread = new AtomicBoolean(true);
+		
+		this.activityQueue = new LinkedBlockingQueue<>();
 		
 		setSize(400, 400);
 		
@@ -96,6 +129,8 @@ public class ChatDialog extends JDialog
 		this.setLocation(pt.x - (100), pt.y - (50));	
 		
 		initUI();
+		
+		typingChatExecutor.execute(new TypingActivity());
 	}
 	
 	public void resetChat(AbstractXMPPConnection con)
@@ -105,7 +140,7 @@ public class ChatDialog extends JDialog
 	
 	public void initUI()
 	{
-		getContentPane().setLayout(new BorderLayout(10, 10));
+		getContentPane().setLayout(new BorderLayout());
 		
 		/*
 		 * Chat text
@@ -118,7 +153,19 @@ public class ChatDialog extends JDialog
 		textScrollPane = new JScrollPane(chatText);
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		
-		getContentPane().add(textScrollPane, BorderLayout.CENTER);
+		activityLabel = new JLabel(" ");
+		final Font displayFont = new Font("Helvetica", Font.ITALIC | Font.PLAIN, 12);
+		activityLabel.setFont(displayFont);
+		activityLabel.setForeground(Color.GRAY);
+		
+		
+		final JPanel textPanel = new JPanel(new BorderLayout());
+		textPanel.add(textScrollPane, BorderLayout.CENTER);
+		textPanel.add(activityLabel, BorderLayout.SOUTH);
+		
+		getContentPane().add(textPanel, BorderLayout.CENTER);
+		
+		
 		
 		/*
 		 * Text creation
@@ -181,6 +228,21 @@ public class ChatDialog extends JDialog
 		    }
 		});
 		
+		
+		createText.addKeyListener(new KeyAdapter()
+		{
+
+			
+			@Override
+			public void keyTyped(KeyEvent e)
+			{
+				activityQueue.offer(ChatState.composing);
+				//super.keyTyped(e);
+			}
+			
+			
+		});
+		
 	    final InputMap input = createText.getInputMap();
 	    KeyStroke enter = KeyStroke.getKeyStroke("ENTER");
 	    KeyStroke shiftEnter = KeyStroke.getKeyStroke("shift ENTER");
@@ -210,6 +272,28 @@ public class ChatDialog extends JDialog
 			}
 			
 		});
+		
+		addWindowListener(new  WindowAdapter()
+		{
+			@Override
+			public void windowClosed(WindowEvent e)
+			{
+				runChatStateThread.set(false);
+			}
+			
+		});
+	}
+	
+	public void onIncomingChatState(final ChatState state)
+	{
+		EventQueue.invokeLater(() ->
+		{
+			if (state == ChatState.composing)
+				activityLabel.setText(contactJid.getLocalpartOrNull() + " is typing");
+			else
+				activityLabel.setText(" ");
+		});
+
 	}
 	
 	public void onIncomingMessage(Message msg)
@@ -297,6 +381,7 @@ public class ChatDialog extends JDialog
 		        Message stanza = new Message();
 		        stanza.setBody(text);
 		        stanza.setType(Message.Type.chat);
+		        stanza.addExtension(new ChatStateExtension(ChatState.active));
 				
 				chat.send(stanza);	
 				
@@ -440,5 +525,58 @@ public class ChatDialog extends JDialog
 			JOptionPane.showMessageDialog(this,"Unknown error creating file transfer request.", 
 		 		    "File Transfer", JOptionPane.ERROR_MESSAGE);
         }
+	}
+	
+	protected class TypingActivity implements Runnable
+	{
+		@Override
+		public void run()
+		{
+			while (runChatStateThread.get())
+			{
+		        try
+		        {
+					ChatState state = (activeChatState == ChatState.composing) ? activityQueue.poll(2, TimeUnit.SECONDS) : activityQueue.take();
+					if (state == ChatState.composing)
+					{
+						// if we are already a composing state, don't send
+						if (activeChatState == ChatState.composing)
+							continue;
+						
+						final ChatManager mgr  = ChatManager.getInstanceFor(con);
+						final Chat chat = mgr.chatWith(contactJid.asEntityBareJidIfPossible());
+						
+						activeChatState = ChatState.composing;
+						
+						// send the message for typing
+				        Message stanza = new Message();
+				        stanza.setType(Message.Type.chat);
+				        stanza.addExtension(new ChatStateExtension(ChatState.composing));
+				        chat.send(stanza);	
+	
+					}
+					else if (state == null)
+					{
+						if (activeChatState == ChatState.active)
+							continue;
+						
+						final ChatManager mgr  = ChatManager.getInstanceFor(con);
+						final Chat chat = mgr.chatWith(contactJid.asEntityBareJidIfPossible());
+						
+						activeChatState = ChatState.active;
+						
+						// send the message for active
+				        Message stanza = new Message();
+				        stanza.setType(Message.Type.chat);
+				        stanza.addExtension(new ChatStateExtension(ChatState.active));
+				        chat.send(stanza);	
+					}
+		        }
+		        catch (Exception e)
+		        {
+		        	e.printStackTrace();
+		        }
+			}
+		}
 	}
 }

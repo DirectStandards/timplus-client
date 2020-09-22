@@ -15,6 +15,9 @@ import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
 import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smackx.chatstates.ChatState;
+import org.jivesoftware.smackx.chatstates.ChatStateListener;
+import org.jivesoftware.smackx.chatstates.ChatStateManager;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.Jid;
 
@@ -27,6 +30,8 @@ public class SingleChatManager
 	protected Map<Jid, ChatDialog> activeChats;
 	
 	protected ChatManager chatManager;
+	
+	protected ChatStateManager chatStateManager;
 	
 	public static synchronized SingleChatManager getInstance(AbstractXMPPConnection con)
 	{
@@ -84,6 +89,16 @@ public class SingleChatManager
 			}
         	
         });
+        
+        chatStateManager = ChatStateManager.getInstance(con);
+        chatStateManager.addChatStateListener( new ChatStateListener()
+        {
+			@Override
+			public void stateChanged(Chat chat, ChatState state, Message message)
+			{
+				processIncomingChatState(chat, state, message);
+			}	
+        });
 	}
 	
 	public ChatDialog createChat(final Jid contactJid)
@@ -131,6 +146,16 @@ public class SingleChatManager
 		final ChatDialog chatDialog = createChat(from.asBareJid());
 
 		chatDialog.onIncomingMessage(message);
+	}
+	
+	protected void processIncomingChatState(Chat chat, ChatState state, Message message)
+	{
+		// don't auto popup the window because chat state
+		// messages can be sent before the first message body is sent
+		final ChatDialog chatDialog = activeChats.get(chat.getXmppAddressOfChatPartner().asBareJid());
+		
+		if (chatDialog != null)
+			chatDialog.onIncomingChatState(state);
 	}
 	
 	protected void processIncomingAMPMessage(EntityBareJid from, Message message, AMPMessageNotification notif)
