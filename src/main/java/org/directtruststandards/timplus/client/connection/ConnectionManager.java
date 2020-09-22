@@ -120,9 +120,13 @@ public class ConnectionManager
 		try
 		{
 			System.out.println("Creating configuration builder.");
-			final Builder conBuilder = XMPPTCPConnectionConfiguration.builder().setUsernameAndPassword(config.getUsername(), config.getPassword())
-					.setXmppDomain(config.getDomain())
-					.setCompressionEnabled(true);
+			final Builder conBuilder = XMPPTCPConnectionConfiguration.builder();
+			System.out.println("Setting username and password.");
+			conBuilder.setUsernameAndPassword(config.getUsername(), config.getPassword());
+			System.out.println("Setting domain.");
+			conBuilder.setXmppDomain(config.getDomain());
+			System.out.println("Setting compression enabled.");
+			conBuilder.setCompressionEnabled(true);
 	        
 			System.out.println("Creating trust manager.");
 			TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() 
