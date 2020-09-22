@@ -262,7 +262,6 @@ public class ConnectionManager
 				ConRequest request = null;
 				try 
 				{
-					System.out.println("Looking for connection work in connection queue.");
 					request = connectQueue.poll(10, TimeUnit.SECONDS);
 				}
 				catch (Exception e) {}
@@ -296,10 +295,6 @@ public class ConnectionManager
 					System.out.println("Disconnecting.");
 					if (con != null && con.isConnected())
 						con.disconnect();
-				}
-				else
-				{
-					System.out.println("No connection work found.");
 				}
 			}
 		}
