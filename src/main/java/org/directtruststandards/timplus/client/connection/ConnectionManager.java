@@ -5,9 +5,9 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLContext;
@@ -34,7 +34,7 @@ public class ConnectionManager
 	
 	protected final Collection<org.directtruststandards.timplus.client.connection.ConnectionListener> connectionListeners;
 	
-	protected ExecutorService connectionMonitorExecutor;
+	protected ScheduledExecutorService connectionMonitorExecutor;
 	
 	protected BlockingQueue<ConRequest> connectQueue;
 	
@@ -52,12 +52,12 @@ public class ConnectionManager
 		
 		this.connectionListeners = new ArrayList<>();
 		
-		this.connectionMonitorExecutor = Executors.newSingleThreadExecutor();
+		this.connectionMonitorExecutor = Executors.newSingleThreadScheduledExecutor();
 		
 		this.connectQueue = new LinkedBlockingQueue<>();
 		
 		System.out.println("Starting up connection manager thread.");
-		connectionMonitorExecutor.execute(new ConnectionOperator());
+		connectionMonitorExecutor.schedule(new ConnectionOperator(), 1, TimeUnit.SECONDS);
 	}
 	
 	public void addConnectionListener(org.directtruststandards.timplus.client.connection.ConnectionListener listener)
