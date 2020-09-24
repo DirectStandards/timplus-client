@@ -103,6 +103,8 @@ public class ChatDialog extends JDialog
 	
 	protected WebView webChatView;
 	
+	protected AtomicBoolean initialized;
+	
 	public ChatDialog(Jid contactJid, AbstractXMPPConnection con)
 	{
 		super((Frame)null, contactJid.toString());
@@ -126,6 +128,8 @@ public class ChatDialog extends JDialog
 		Point pt = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
 		
 		this.setLocation(pt.x - (100), pt.y - (50));	
+		
+		this.initialized = new AtomicBoolean(false);
 		
 		initUI();
 		
@@ -335,6 +339,15 @@ public class ChatDialog extends JDialog
 		Platform.runLater(() -> 
 		{
 			
+			if (!initialized.get())
+			{
+				try
+				{
+					TimeUnit.SECONDS.sleep(1);
+				}
+				catch (Exception e) {}
+				initialized.set(true);
+			}
 			final WebEngine engine = webChatView.getEngine();
 
 	        Document webDoc = engine.getDocument();
@@ -399,6 +412,9 @@ public class ChatDialog extends JDialog
 	
 	protected void sendMessage()
 	{
+		if (!initialized.get())
+			initialized.set(true);
+		
 		if (!StringUtils.isEmpty(createText.getText().trim()))
 		{
 			final ChatManager mgr  = ChatManager.getInstanceFor(con);
