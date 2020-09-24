@@ -15,6 +15,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -316,6 +317,25 @@ public class GroupChatDialog extends JDialog
 		
 		final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
 		
+        while (webChatView == null)
+        {
+        	try
+        	{
+        		TimeUnit.SECONDS.sleep(1);
+        	}
+        	catch (Exception e) {}
+        }
+		final WebEngine eng = webChatView.getEngine();
+
+        Document checkDoc = eng.getDocument();
+        while (checkDoc == null)
+        {
+        	try
+        	{
+        		TimeUnit.SECONDS.sleep(1);
+        	}
+        	catch (Exception e) {}
+        }
 		
 		/*
 		 * Do this on the platform queue 
