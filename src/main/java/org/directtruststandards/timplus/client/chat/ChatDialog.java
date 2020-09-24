@@ -22,19 +22,16 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
+import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -47,17 +44,15 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
-import javax.swing.text.EditorKit;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
 
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.filetransport.OutgoingFileTransferDialog;
 import org.directtruststandards.timplus.client.notifications.AMPMessageNotification;
+import org.directtruststandards.timplus.client.util.DocumentUtils;
 import org.directtruststandards.timplus.client.util.WrapEditorKit;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.chat2.Chat;
@@ -71,6 +66,16 @@ import org.jivesoftware.smackx.delay.packet.DelayInformation;
 import org.jivesoftware.smackx.xhtmlim.packet.XHTMLExtension;
 import org.jxmpp.jid.EntityFullJid;
 import org.jxmpp.jid.Jid;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.xml.sax.InputSource;
+
+import javafx.application.Platform;
+import javafx.embed.swing.JFXPanel;
+import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebView;
 
 public class ChatDialog extends JDialog
 {
@@ -88,19 +93,15 @@ public class ChatDialog extends JDialog
 	
 	protected Jid contactJid;
 	
-	protected JTextPane chatText;
-	
 	protected JTextPane createText;
-	
-	protected JScrollPane textScrollPane;
-	
-	protected Map<String, AtomicInteger> unackedMessages; 
 	
 	protected ChatState activeChatState;
 	
 	protected AtomicBoolean runChatStateThread;
 	
 	protected JLabel activityLabel;
+	
+	protected WebView webChatView;
 	
 	public ChatDialog(Jid contactJid, AbstractXMPPConnection con)
 	{
@@ -109,8 +110,6 @@ public class ChatDialog extends JDialog
 		this.contactJid = contactJid;
 
 		this.con = con;
-		
-		this.unackedMessages = new HashMap<>();
 		
 		this.typingChatExecutor = Executors.newSingleThreadExecutor();
 		
@@ -145,13 +144,26 @@ public class ChatDialog extends JDialog
 		/*
 		 * Chat text
 		 */
-		chatText = new JTextPane();
-		chatText.setEditable(false);
-		chatText.setEditorKit(new HTMLEditorKit());
-		chatText.setDocument(new HTMLDocument());
+		final JFXPanel jfxPane = new JFXPanel();
 		
-		textScrollPane = new JScrollPane(chatText);
-		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+		Platform.setImplicitExit(false);
+		Platform.runLater(() -> 
+		{
+			try				
+			{
+				webChatView = new WebView();
+				webChatView.getEngine().loadContent( "<html><body style=\"font-size:90%;\"></body></html>");
+				
+				StackPane root = new StackPane();
+				root.getChildren().add(webChatView);
+				
+				jfxPane.setScene( new Scene( root ) );
+			}
+			catch (Exception e) 
+			{
+				e.printStackTrace();
+			}
+		});
 		
 		activityLabel = new JLabel(" ");
 		final Font displayFont = new Font("Helvetica", Font.ITALIC | Font.PLAIN, 12);
@@ -160,7 +172,7 @@ public class ChatDialog extends JDialog
 		
 		
 		final JPanel textPanel = new JPanel(new BorderLayout());
-		textPanel.add(textScrollPane, BorderLayout.CENTER);
+		textPanel.add(jfxPane, BorderLayout.CENTER);
 		textPanel.add(activityLabel, BorderLayout.SOUTH);
 		
 		getContentPane().add(textPanel, BorderLayout.CENTER);
@@ -208,6 +220,7 @@ public class ChatDialog extends JDialog
 		/*
 		 * Actions
 		 */
+		/*
 		chatText.setDropTarget(new DropTarget() 
 		{
 			private static final long serialVersionUID = 7559255704248380014L;
@@ -217,6 +230,7 @@ public class ChatDialog extends JDialog
 				sendFile(evt);
 		    }
 		});
+		*/
 		
 		createText.setDropTarget(new DropTarget() 
 		{
@@ -298,10 +312,8 @@ public class ChatDialog extends JDialog
 
 	}
 	
-	public void onIncomingMessage(Message msg)
+	public void onIncomingMessage(final Message msg)
 	{
-		final StyledDocument doc = chatText.getStyledDocument();
-		final EditorKit editKit = chatText.getEditorKit();
 		// check to see if this is a delayed message
 	    final DelayInformation delay = (DelayInformation)msg.getExtension(DelayInformation.NAMESPACE);
 		
@@ -317,56 +329,72 @@ public class ChatDialog extends JDialog
 		}
 		
 		final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
-		
-		
-		/*
-		 * Do this on the event queue so the 
-		 * scroll pane auto scrolls to the bottom
-		 */
-        java.awt.EventQueue.invokeLater(new Runnable() 
-        {
-            @Override
-            public void run() 
-            {
-            	synchronized(unackedMessages)
-            	{
-	            	
-	    			builder.append(msg.getFrom().asBareJid().getLocalpartOrNull());
-	    			
-	    			
-	    			builder.append("\r\n");
-	    			
-	    			try
-	    			{
-		    			final SimpleAttributeSet red = new SimpleAttributeSet();
-		    			StyleConstants.setForeground(red, Color.red);
-		    			StyleConstants.setItalic(red, true);
-		    			
-		    			doc.insertString(doc.getLength(), builder.toString(), red);
-		    			if (!(editKit instanceof HTMLEditorKit && doc instanceof HTMLDocument))
-		    				doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
-		    			else
-		    			{
-		    				// check if there is alternative text
-		    				final XHTMLExtension htmlBody = (XHTMLExtension)msg.getExtension(XHTMLExtension.NAMESPACE);
-		    				if (htmlBody != null)
-		    				{
-		    					final HTMLEditorKit htmlKit = (HTMLEditorKit)editKit;
-		    					for (CharSequence seq : htmlBody.getBodies())
-		    					{
-		    						htmlKit.insertHTML((HTMLDocument)doc, doc.getLength(), seq.toString(), 0, 0, null);
-		    					}
-		    				}
-		    				else
-		    					doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
-		    			}
-	    			}
-	    			catch (Exception e) {}
-            	}
-            }
-        });
+		builder.append(msg.getFrom().asBareJid().getLocalpartOrNull());
 
 
+		Platform.runLater(() -> 
+		{
+			
+			final WebEngine engine = webChatView.getEngine();
+
+	        Document webDoc = engine.getDocument();
+	        Element body = (Element) webDoc.getElementsByTagName("body").item(0);
+			
+	        Element msgHeader = webDoc.createElement("i");
+	        msgHeader.setAttribute("style", "color:red;text-align:left;");
+	        msgHeader.setTextContent(builder.toString());
+	        
+	        body.appendChild(msgHeader);
+	        
+	        Element br = webDoc.createElement("br");
+	        body.appendChild(br);
+	        
+			// check if there is alternative text
+			final XHTMLExtension htmlBody = (XHTMLExtension)msg.getExtension(XHTMLExtension.NAMESPACE);
+			if (htmlBody != null)
+			{
+				for (CharSequence seq : htmlBody.getBodies())
+				{
+					final StringBuilder sb = new StringBuilder(seq.length());
+					sb.append(seq);
+					final String seqText = sb.toString();
+					
+					// this is probably too heavy using a document parser, but at least it's robust and reliable
+			        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			        try
+			        {
+				        final DocumentBuilder docBuilder = factory.newDocumentBuilder();
+				        final Document incomingDoc = docBuilder.parse(new InputSource(new StringReader(seqText)));
+				        Element msgBodyEle = (Element)incomingDoc.getFirstChild();
+				        
+				        // check if the next element is a <p>.... if so, let eat it and move on
+				        if (msgBodyEle.getFirstChild() instanceof Element && ((Element)msgBodyEle.getFirstChild()).getTagName().compareToIgnoreCase("p") == 0)
+				        	msgBodyEle = (Element)msgBodyEle.getFirstChild();
+				        
+				        Element msgText = DocumentUtils.deepCopyElement(msgBodyEle, webDoc, "msg");
+				        body.appendChild(msgText);
+
+			        }
+			        catch (Exception e)
+			        {
+			        	e.printStackTrace();
+			        }
+				}
+			}
+			else
+			{
+		        Element msgText = webDoc.createElement("msg");
+		        msgText.setTextContent(msg.getBody());
+		        body.appendChild(msgText);
+			}
+	        
+	        Element br2 = webDoc.createElement("br");
+	        body.appendChild(br2);
+	        
+	        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+	        
+		});	
+        
 	}
 	
 	protected void sendMessage()
@@ -380,14 +408,12 @@ public class ChatDialog extends JDialog
 			{
 				final String text = createText.getText().trim();
 				
-		        Message stanza = new Message();
+		        final Message stanza = new Message();
 		        stanza.setBody(text);
 		        stanza.setType(Message.Type.chat);
 		        stanza.addExtension(new ChatStateExtension(ChatState.active));
 				
 				chat.send(stanza);	
-				
-				final StyledDocument doc = chatText.getStyledDocument();
 				
 				final String pattern = "HH:mm:ss";
 				final SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
@@ -396,16 +422,42 @@ public class ChatDialog extends JDialog
 				final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
 				builder.append("Me");
 				
-    			int notificationInsertLoc = doc.getLength() + builder.toString().length();
-    			unackedMessages.put(stanza.getStanzaId(), new AtomicInteger(notificationInsertLoc));
-				
-    			builder.append("\r\n");
-				
-				final SimpleAttributeSet blue = new SimpleAttributeSet();
-				StyleConstants.setForeground(blue, Color.blue);
-				StyleConstants.setItalic(blue, true);
-				doc.insertString(doc.getLength(), builder.toString(), blue);
-				doc.insertString(doc.getLength(), text + "\r\n", null);
+				Platform.runLater(() -> 
+				{					
+					final WebEngine engine = webChatView.getEngine();
+			        Document doc = engine.getDocument();
+			        Element body = (Element) doc.getElementsByTagName("body").item(0);
+					
+			        Element msgHeader = doc.createElement("i");
+			        msgHeader.setAttribute("style", "color:blue");
+			        msgHeader.setTextContent(builder.toString());
+			        
+			        /*
+			         * Holder for the delivery status
+			         */
+			        Element span = doc.createElement("span");
+			        span.setAttribute("style", "color:gray;float:right;");
+			        
+			        Element delStatus = doc.createElement(stanza.getStanzaId());
+			        span.appendChild(delStatus);
+			        
+			        
+			        msgHeader.appendChild(span);
+			        
+			        body.appendChild(msgHeader);
+			        
+			        Element br = doc.createElement("br");
+			        body.appendChild(br);
+			        
+			        Element msg = doc.createElement("msg");
+			        msg.setTextContent(text);
+			        body.appendChild(msg);
+			        
+			        Element br2 = doc.createElement("br");
+			        body.appendChild(br2);
+			     
+			        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+				});				
 				
 				
 				createText.setText("");
@@ -421,60 +473,34 @@ public class ChatDialog extends JDialog
 	
 	public void onIncomingAMPMessage(AMPMessageNotification notif)
 	{
-		synchronized (unackedMessages)
+
+		final StringBuilder builder = new StringBuilder("  ");
+		switch (notif.getMessageStatus())
 		{
-			final AtomicInteger notifLoc = unackedMessages.remove(notif.getStanzaId());
-			if (notifLoc != null)
-			{
-				final StringBuilder builder = new StringBuilder("  ");
-				switch (notif.getMessageStatus())
-				{
-					case DELIVERED:
-						builder.append("delivered");
-						break;
-					case STORED_OFFLINE:
-						builder.append("stored offline");
-						break;
-					case ERROR:
-						builder.append("error");
-						break;
-				}
-				
-				final SimpleAttributeSet notifFont = new SimpleAttributeSet();
-				StyleConstants.setForeground(notifFont, Color.gray);
-				StyleConstants.setItalic(notifFont, true);
-				StyleConstants.setAlignment(notifFont, StyleConstants.ALIGN_RIGHT);
-				
-		        java.awt.EventQueue.invokeLater(new Runnable() 
-		        {
-		            @Override
-		            public void run() 
-		            {
-		            	synchronized(unackedMessages)
-		            	{
-		            	
-			            	final StyledDocument doc = chatText.getStyledDocument();
-			            	try
-			            	{
-			            		doc.insertString(notifLoc.get(), builder.toString(), notifFont);
-			            		
-				            	// shift all exiting un-acked message locations
-				            	for (Entry<String, AtomicInteger> entry : unackedMessages.entrySet())
-				            	{
-				            		if (entry.getKey() != notif.getStanzaId() && entry.getValue().get() > notifLoc.get())
-				            		{
-				            			int newLoc = entry.getValue().get() + builder.toString().length();
-				            			entry.getValue().set(newLoc);
-				            		}
-				            	}
-			            	}
-			            	catch (Exception e) {};
-		            	}
-		            }
-		        });
-				
-			}
+			case DELIVERED:
+				builder.append("delivered");
+				break;
+			case STORED_OFFLINE:
+				builder.append("stored offline");
+				break;
+			case ERROR:
+				builder.append("error");
+				break;
 		}
+		
+		Platform.runLater(() -> 
+		{
+			final WebEngine engine = webChatView.getEngine();
+	        final Document doc = engine.getDocument();
+	        
+	        final org.w3c.dom.NodeList notifNodes = doc.getElementsByTagName(notif.getStanzaId());
+	        if (notifNodes != null && notifNodes.getLength() != 0)
+	        {
+	        	final Element notifEl = (Element)notifNodes.item(0);
+	        	notifEl.setTextContent(builder.toString());
+	        }
+		});
+
 	}
 	
 	protected void sendFile(DropTargetDropEvent evt)

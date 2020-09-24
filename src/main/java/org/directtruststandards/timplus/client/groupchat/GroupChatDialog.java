@@ -1,9 +1,7 @@
 package org.directtruststandards.timplus.client.groupchat;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.GraphicsEnvironment;
@@ -12,6 +10,7 @@ import java.awt.GridBagLayout;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -34,12 +33,12 @@ import javax.swing.JTable;
 import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.roster.GroupChatItem;
+import org.directtruststandards.timplus.client.util.DocumentUtils;
 import org.directtruststandards.timplus.client.util.WrapEditorKit;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.MessageListener;
@@ -49,14 +48,29 @@ import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
 import org.jivesoftware.smackx.muc.MultiUserChat;
 import org.jivesoftware.smackx.muc.MultiUserChatManager;
+import org.jivesoftware.smackx.xhtmlim.packet.XHTMLExtension;
 import org.jxmpp.jid.EntityFullJid;
 import org.jxmpp.jid.impl.JidCreate;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.xml.sax.InputSource;
+
+import javafx.application.Platform;
+import javafx.embed.swing.JFXPanel;
+import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebView;
 
 public class GroupChatDialog extends JDialog
 {
 
 	private static final long serialVersionUID = 247130058897979136L;
 
+	protected static final String XHTML_IM_HEADER = "<body xmlns='http://www.w3.org/1999/xhtml'>";
+	
+	protected static final String XHTML_IM_HEADER_ALT = "<body xmlns=\"http://www.w3.org/1999/xhtml\">";
+			
 	protected AbstractXMPPConnection con;
 	
 	protected MultiUserChat room;
@@ -65,13 +79,11 @@ public class GroupChatDialog extends JDialog
 	
 	private static final String INSERT_BREAK = "insert-break";
 	
-	protected JTextPane chatText;
-	
 	protected JTextPane createText;
 	
-	protected JScrollPane textScrollPane;
-	
 	protected JTable participantList;
+	
+	protected WebView webChatView;
 	
 	public GroupChatDialog(AbstractXMPPConnection con, MultiUserChat room)
 	{
@@ -103,11 +115,27 @@ public class GroupChatDialog extends JDialog
 		/*
 		 * Chat text
 		 */
-		chatText = new JTextPane();
-		chatText.setEditable(false);
 		
-		textScrollPane = new JScrollPane(chatText);
-		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+		final JFXPanel jfxPane = new JFXPanel();
+		
+		Platform.setImplicitExit(false);
+		Platform.runLater(() -> 
+		{
+			try				
+			{
+				webChatView = new WebView();
+				webChatView.getEngine().loadContent( "<html><body style=\"font-size:90%;\"></body></html>");
+				
+				StackPane root = new StackPane();
+				root.getChildren().add(webChatView);
+				
+				jfxPane.setScene( new Scene( root ) );
+			}
+			catch (Exception e) 
+			{
+				e.printStackTrace();
+			}
+		});
 		
 		/*
 		 * Participant list
@@ -133,7 +161,8 @@ public class GroupChatDialog extends JDialog
 		 * Split pane for chat and member list
 		 */
 		
-		final JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, textScrollPane, participantPanel);
+		//final JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, textScrollPane, participantPanel);
+		final JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, jfxPane, participantPanel);
 		splitPane.setOneTouchExpandable(true);
 		splitPane.setDividerLocation(350);
 		
@@ -263,15 +292,13 @@ public class GroupChatDialog extends JDialog
 		});
 	}
 	
-	public void onIncomingMessage(Message msg)
+	public void onIncomingMessage(final Message msg)
 	{
 		if (msg.getFrom().getResourceOrNull() == null)
 			return;
 		
 		if (room.getNickname().equals(msg.getFrom().getResourceOrNull()))
 			return;
-		
-		final StyledDocument doc = chatText.getStyledDocument();
 		
 		// check to see if this is a delayed message
 	    final DelayInformation delay = (DelayInformation)msg.getExtension(DelayInformation.NAMESPACE);
@@ -291,36 +318,70 @@ public class GroupChatDialog extends JDialog
 		
 		
 		/*
-		 * Do this on the event queue so the 
-		 * scroll pane auto scrolls to the bottom
+		 * Do this on the platform queue 
 		 */
-        EventQueue.invokeLater(() ->
-        {
-            {
+		Platform.runLater(() -> 
+		{
+			
+			final WebEngine engine = webChatView.getEngine();
 
-    			builder.append(msg.getFrom().getResourceOrNull().toString());
-    			
-    			
-    			builder.append("\r\n");
-    			
-    			try
-    			{
-	    			final SimpleAttributeSet red = new SimpleAttributeSet();
-	    			StyleConstants.setForeground(red, Color.red);
-	    			StyleConstants.setItalic(red, true);
-	    			
-	    			doc.insertString(doc.getLength(), builder.toString(), red);
-	    			doc.insertString(doc.getLength(), msg.getBody() + "\r\n", null);
-    			}
-    			catch (Exception e) 
-    			{
-    				e.printStackTrace();
-    			}
-            	
-            }
-        });
+	        Document webDoc = engine.getDocument();
+	        Element body = (Element) webDoc.getElementsByTagName("body").item(0);
+			
+	        Element msgHeader = webDoc.createElement("i");
+	        msgHeader.setAttribute("style", "color:red");
+	        msgHeader.setTextContent(builder.toString());
+	        
+	        body.appendChild(msgHeader);
+	        
+	        Element br = webDoc.createElement("br");
+	        body.appendChild(br);
+	        
+			// check if there is alternative text
+			final XHTMLExtension htmlBody = (XHTMLExtension)msg.getExtension(XHTMLExtension.NAMESPACE);
+			if (htmlBody != null)
+			{
+				for (CharSequence seq : htmlBody.getBodies())
+				{
+					final StringBuilder sb = new StringBuilder(seq.length());
+					sb.append(seq);
+					final String seqText = sb.toString();
+					
+					// this is probably too heavy using a document parser, but at least it's robust and reliable
+			        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			        try
+			        {
+				        final DocumentBuilder docBuilder = factory.newDocumentBuilder();
+				        final Document incomingDoc = docBuilder.parse(new InputSource(new StringReader(seqText)));
+				        Element msgBodyEle = (Element)incomingDoc.getFirstChild();
+				        
+				        // check if the next element is a <p>.... if so, let eat it and move on
+				        if (msgBodyEle.getFirstChild() instanceof Element && ((Element)msgBodyEle.getFirstChild()).getTagName().compareToIgnoreCase("p") == 0)
+				        	msgBodyEle = (Element)msgBodyEle.getFirstChild();
+				        
+				        Element msgText = DocumentUtils.deepCopyElement(msgBodyEle, webDoc, "msg");
+				        body.appendChild(msgText);
 
-
+			        }
+			        catch (Exception e)
+			        {
+			        	e.printStackTrace();
+			        }
+				}
+			}
+			else
+			{
+		        Element msgText = webDoc.createElement("msg");
+		        msgText.setTextContent(msg.getBody());
+		        body.appendChild(msgText);
+			}
+	        
+	        Element br2 = webDoc.createElement("br");
+	        body.appendChild(br2);
+	        
+	        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+	        
+		});		
 	}
 	
 	protected void sendMessage()
@@ -333,22 +394,38 @@ public class GroupChatDialog extends JDialog
 								
 				room.sendMessage(text);
 				
-				final StyledDocument doc = chatText.getStyledDocument();
-				
-				final String pattern = "HH:mm:ss";
-				final SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
-				final String date = simpleDateFormat.format(new Date());
+				Platform.runLater(() -> 
+				{
+					final String pattern = "HH:mm:ss";
+					final SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
+					final String date = simpleDateFormat.format(new Date());
 
-				final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
-				builder.append("Me");
-				
-    			builder.append("\r\n");
-				
-				final SimpleAttributeSet blue = new SimpleAttributeSet();
-				StyleConstants.setForeground(blue, Color.blue);
-				StyleConstants.setItalic(blue, true);
-				doc.insertString(doc.getLength(), builder.toString(), blue);
-				doc.insertString(doc.getLength(), text + "\r\n", null);
+					final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
+					builder.append("Me");
+					
+					
+					final WebEngine engine = webChatView.getEngine();
+			        Document doc = engine.getDocument();
+			        Element body = (Element) doc.getElementsByTagName("body").item(0);
+					
+			        Element msgHeader = doc.createElement("i");
+			        msgHeader.setAttribute("style", "color:blue");
+			        msgHeader.setTextContent(builder.toString());
+			        
+			        body.appendChild(msgHeader);
+			        
+			        Element br = doc.createElement("br");
+			        body.appendChild(br);
+			        
+			        Element msg = doc.createElement("msg");
+			        msg.setTextContent(text);
+			        body.appendChild(msg);
+			        
+			        Element br2 = doc.createElement("br");
+			        body.appendChild(br2);
+			     
+			        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+				});
 				
 				createText.setText("");
 			}
@@ -383,7 +460,6 @@ public class GroupChatDialog extends JDialog
 	
 	protected void presenceUpdated(Presence presence)
 	{
-		final StyledDocument doc = chatText.getStyledDocument();
 		
 		final String pattern = "HH:mm:ss";
 		final SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
@@ -414,24 +490,32 @@ public class GroupChatDialog extends JDialog
 		final String actionText = action;
 		
 		if (!StringUtils.isEmpty(actionText))
-		{
-			EventQueue.invokeLater(() ->
-			{
-    			final SimpleAttributeSet red = new SimpleAttributeSet();
-    			StyleConstants.setForeground(red, Color.red);
-    			StyleConstants.setItalic(red, true);
-    			
-				final SimpleAttributeSet notifFont = new SimpleAttributeSet();
-				StyleConstants.setForeground(notifFont, Color.gray);
-				StyleConstants.setItalic(notifFont, true);
-    			
-				try
-				{
-					doc.insertString(doc.getLength(), builder.toString(), red);
-					doc.insertString(doc.getLength(), actionText, notifFont);
-				}
-				catch (Exception e) {}
-			});
+		{			
+			Platform.runLater(() -> 
+			{				
+				final WebEngine engine = webChatView.getEngine();
+		        Document doc = engine.getDocument();
+		        Element body = (Element) doc.getElementsByTagName("body").item(0);
+				
+		        Element msgHeader = doc.createElement("i");
+		        msgHeader.setAttribute("style", "color:red");
+		        msgHeader.setTextContent(builder.toString());
+		        
+		        body.appendChild(msgHeader);
+		        
+		        Element br = doc.createElement("br");
+		        body.appendChild(br);
+		        
+		        Element msg = doc.createElement("msg");
+		        msg.setAttribute("style", "color:grey");
+		        msg.setTextContent(actionText);
+		        body.appendChild(msg);
+		        
+		        Element br2 = doc.createElement("br");
+		        body.appendChild(br2);
+		        
+		        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+			});		
 		}
 	}
 	
