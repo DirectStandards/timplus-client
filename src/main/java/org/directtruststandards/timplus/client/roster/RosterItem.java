@@ -66,7 +66,9 @@ public class RosterItem
 		
 		AWAY,
 		
-		DND
+		DND,
+		
+		BLOCKED
 	}
 	
 	public enum Subscription

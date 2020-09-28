@@ -16,7 +16,10 @@ import java.awt.image.BufferedImage;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 import javax.imageio.ImageIO;
@@ -49,6 +52,7 @@ import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
 import org.directtruststandards.timplus.client.vcard.VCardManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.StanzaCollector;
 import org.jivesoftware.smack.SmackException.ConnectionException;
 import org.jivesoftware.smack.XMPPException.StreamErrorException;
 import org.jivesoftware.smack.packet.Presence;
@@ -58,6 +62,9 @@ import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.Roster.SubscriptionMode;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.sasl.SASLErrorException;
+import org.jivesoftware.smackx.blocking.element.BlockContactsIQ;
+import org.jivesoftware.smackx.blocking.element.BlockListIQ;
+import org.jivesoftware.smackx.blocking.element.UnblockContactsIQ;
 import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.muc.RoomInfo;
 import org.jxmpp.jid.EntityBareJid;
@@ -95,6 +102,10 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 	protected GroupChatListener groupChatListener;
 	
 	protected ExecutorService reconnectExecutorService;
+	
+	protected JMenuItem blockMenuItem;
+	
+	protected JMenuItem unblockMenuItem;
 	
 	public RosterFrame()
 	{
@@ -316,7 +327,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		});
 		contactPopup.add(imItem);		
 		
-		final JMenuItem deleteItem = new JMenuItem("Delete Contact");
+		final JMenuItem deleteItem = new JMenuItem("Delete");
 		deleteItem.addActionListener(new ActionListener()
 		{
 			@Override
@@ -327,6 +338,30 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			}	
 		});
 		contactPopup.add(deleteItem);
+		
+		blockMenuItem = new JMenuItem("Block");
+		blockMenuItem.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				blockContact();
+				
+			}	
+		});
+		contactPopup.add(blockMenuItem);
+		
+		unblockMenuItem = new JMenuItem("Unblock");
+		unblockMenuItem.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				unblockContact();
+				
+			}	
+		});
+		contactPopup.add(unblockMenuItem);
 		
 		final JMenuItem subRequest = new JMenuItem("Send Subscription Request");
 		subRequest.addActionListener(new ActionListener()
@@ -632,6 +667,86 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		}
 	}
 	
+	protected void blockContact()
+	{
+		int idx = contactsList.getSelectedRow();
+		if (idx >= 0)
+		{
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
+			
+			int selection = JOptionPane.showConfirmDialog(this, "Are you sure you want to block the contact " + item.getRosterJID().toString() + "?\r\n" +
+					"You will no longer be able to communicate with this contact\r\nor see presence information.",
+					"Block Contact", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+			
+			if (selection == JOptionPane.NO_OPTION)
+				return;	
+			
+			
+			for (RosterEntry entry : roster.getEntries())
+			{
+				if (entry.getJid().toString().compareToIgnoreCase(item.getRosterJID().toString()) == 0)
+				{
+					try
+					{
+						final BlockContactsIQ block = new BlockContactsIQ(Collections.singletonList(entry.getJid().asBareJid()));
+						
+						con.sendStanza(block);
+					}
+					catch (Exception e)
+					{
+						JOptionPane.showMessageDialog(this,"An error occured trying to block the contact.", 
+					 		    "Block Error", JOptionPane.ERROR_MESSAGE );
+					}
+					
+					// we are suppose to get a push notification from the server that the
+					// contact has been blocked if this was successful
+					
+					break;
+				}
+			}
+		}		
+	}
+	
+	protected void unblockContact()
+	{
+		int idx = contactsList.getSelectedRow();
+		if (idx >= 0)
+		{
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
+			
+			int selection = JOptionPane.showConfirmDialog(this, "Are you sure you want to unblock the contact " + item.getRosterJID().toString() + "?\r\n" +
+					"The contact will be able to send you messages and see your presence (if already approved).",
+					"UnBlock Contact", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+			
+			if (selection == JOptionPane.NO_OPTION)
+				return;	
+			
+			
+			for (RosterEntry entry : roster.getEntries())
+			{
+				if (entry.getJid().toString().compareToIgnoreCase(item.getRosterJID().toString()) == 0)
+				{
+					try
+					{
+						final UnblockContactsIQ unblock = new UnblockContactsIQ(Collections.singletonList(entry.getJid().asBareJid()));
+						
+						con.sendStanza(unblock);
+					}
+					catch (Exception e)
+					{
+						JOptionPane.showMessageDialog(this,"An error occured trying to unblock the contact.", 
+					 		    "Unblock Error", JOptionPane.ERROR_MESSAGE );
+					}
+					
+					// we are suppose to get a push notification from the server that the
+					// contact has been unblocked if this was successful
+					
+					break;
+				}
+			}
+		}		
+	}
+	
 	protected void imContact()
 	{
 		int idx = contactsList.getSelectedRow();
@@ -718,6 +833,22 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 	
 	protected void loadRoster()
 	{
+		// get the block list and put it in a map
+		final Map<Jid, Jid> blockList = new HashMap<>();
+		try
+		{
+			final BlockListIQ blockIQ = new BlockListIQ();
+			final  StanzaCollector blockIQCollector = con.createStanzaCollectorAndSend(blockIQ);
+			final BlockListIQ resultBlockIQ = blockIQCollector.nextResultOrThrow(3000);
+			
+			for (Jid blockJid : resultBlockIQ.getBlockedJids())
+				blockList.put(blockJid.asBareJid(), blockJid.asBareJid());
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		
 		final List<RosterItem> rosterItems = new ArrayList<>();
 		for (RosterEntry entry : roster.getEntries())
 		{
@@ -726,10 +857,17 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			item.setRosterJID(entry.getJid());
 			final Subscription sub = entry.canSeeHisPresence() ? Subscription.APPROVED : (entry.isSubscriptionPending() ? Subscription.REQUESTED : Subscription.DENIED);
 			
-			if (sub == Subscription.APPROVED)
-				item.setPresence(Presense.UNAVAILABLE);
+			if (blockList.containsKey(entry.getJid().asBareJid()))
+			{
+				item.setPresence(Presense.BLOCKED);
+			}
 			else
-				item.setPresence(Presense.NOT_AUTHORIZED);
+			{
+				if (sub == Subscription.APPROVED)
+					item.setPresence(Presense.UNAVAILABLE);
+				else
+					item.setPresence(Presense.NOT_AUTHORIZED);
+			}
 			
 			item.setSub(sub);
 			
@@ -820,6 +958,10 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		    {
 		    	contactsList.getSelectionModel().setSelectionInterval(clickedRow, clickedRow);
 		    	contactPopup.show(e.getComponent(), pt.x, pt.y);
+		    	
+		    	final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(clickedRow, 0);
+		    	blockMenuItem.setVisible((item.getPresence() == RosterItem.Presense.BLOCKED) ? false : true);
+		    	unblockMenuItem.setVisible((item.getPresence() != RosterItem.Presense.BLOCKED) ? false : true);
 		    }
 		}
 		else if (e.getButton() == MouseEvent.BUTTON1)

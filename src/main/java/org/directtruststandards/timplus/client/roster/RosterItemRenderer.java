@@ -28,6 +28,8 @@ public class RosterItemRenderer implements TableCellRenderer
 	
 	static ImageIcon UNAUTHORIZED;
 	
+	static ImageIcon BLOCKED;	
+	
 	protected JLabel displayLabel;
 	
 	protected JLabel presLabel;
@@ -57,6 +59,10 @@ public class RosterItemRenderer implements TableCellRenderer
 			imageURL = RosterItemRenderer.class.getResource("/images/unauthorized.png");
 			image = ImageIO.read(imageURL);
 			UNAUTHORIZED = new ImageIcon(new ImageIcon(image).getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH));
+			
+			imageURL = RosterItemRenderer.class.getResource("/images/blocked.png");
+			image = ImageIO.read(imageURL);
+			BLOCKED = new ImageIcon(new ImageIcon(image).getImage().getScaledInstance(16, 16, Image.SCALE_SMOOTH));
 		}
 		catch (IOException e)
 		{
@@ -65,6 +71,7 @@ public class RosterItemRenderer implements TableCellRenderer
 			OFFLINE = null;
 			UNAUTHORIZED = null;
 			DND = null;
+			BLOCKED = null;
 		}
 	}
 	
@@ -114,7 +121,10 @@ public class RosterItemRenderer implements TableCellRenderer
 					break;							
 				case NOT_AUTHORIZED:
 					presLabel.setIcon(UNAUTHORIZED);
-					break;					
+					break;	
+				case BLOCKED:
+					presLabel.setIcon(BLOCKED);
+					break;						
 				default:
 					presLabel.setIcon(OFFLINE);
 			}
