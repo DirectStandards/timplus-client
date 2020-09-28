@@ -52,7 +52,6 @@ import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
 import org.directtruststandards.timplus.client.vcard.VCardManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
-import org.jivesoftware.smack.StanzaCollector;
 import org.jivesoftware.smack.SmackException.ConnectionException;
 import org.jivesoftware.smack.XMPPException.StreamErrorException;
 import org.jivesoftware.smack.packet.Presence;
@@ -62,15 +61,15 @@ import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.Roster.SubscriptionMode;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.sasl.SASLErrorException;
-import org.jivesoftware.smackx.blocking.element.BlockContactsIQ;
-import org.jivesoftware.smackx.blocking.element.BlockListIQ;
-import org.jivesoftware.smackx.blocking.element.UnblockContactsIQ;
+import org.jivesoftware.smackx.blocking.BlockingCommandManager;
+import org.jivesoftware.smackx.blocking.JidsBlockedListener;
+import org.jivesoftware.smackx.blocking.JidsUnblockedListener;
 import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.muc.RoomInfo;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.Jid;
 
-public class RosterFrame extends JFrame implements ConnectionListener, UserActivityListener
+public class RosterFrame extends JFrame implements ConnectionListener, UserActivityListener, JidsBlockedListener, JidsUnblockedListener
 {
 	
 	private static final long serialVersionUID = -5862072428442358408L;
@@ -497,6 +496,13 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		}
 		catch (Exception e) {}
 		
+		// update the roster with block list items
+		loadBlockList();
+		
+		// listen for roster block changes
+		BlockingCommandManager.getInstanceFor(con).addJidsBlockedListener(this);
+		BlockingCommandManager.getInstanceFor(con).addJidsUnblockedListener(this);
+		
 		// init the chat manager
 		SingleChatManager.getInstance(con).setConnection(con);
 		
@@ -687,10 +693,8 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 				if (entry.getJid().toString().compareToIgnoreCase(item.getRosterJID().toString()) == 0)
 				{
 					try
-					{
-						final BlockContactsIQ block = new BlockContactsIQ(Collections.singletonList(entry.getJid().asBareJid()));
-						
-						con.sendStanza(block);
+					{	
+						BlockingCommandManager.getInstanceFor(con).blockContacts(Collections.singletonList(entry.getJid().asBareJid()));
 					}
 					catch (Exception e)
 					{
@@ -728,9 +732,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 				{
 					try
 					{
-						final UnblockContactsIQ unblock = new UnblockContactsIQ(Collections.singletonList(entry.getJid().asBareJid()));
-						
-						con.sendStanza(unblock);
+						BlockingCommandManager.getInstanceFor(con).unblockContacts(Collections.singletonList(entry.getJid().asBareJid()));
 					}
 					catch (Exception e)
 					{
@@ -832,23 +834,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 	}
 	
 	protected void loadRoster()
-	{
-		// get the block list and put it in a map
-		final Map<Jid, Jid> blockList = new HashMap<>();
-		try
-		{
-			final BlockListIQ blockIQ = new BlockListIQ();
-			final  StanzaCollector blockIQCollector = con.createStanzaCollectorAndSend(blockIQ);
-			final BlockListIQ resultBlockIQ = blockIQCollector.nextResultOrThrow(3000);
-			
-			for (Jid blockJid : resultBlockIQ.getBlockedJids())
-				blockList.put(blockJid.asBareJid(), blockJid.asBareJid());
-		}
-		catch (Exception e)
-		{
-			e.printStackTrace();
-		}
-		
+	{		
 		final List<RosterItem> rosterItems = new ArrayList<>();
 		for (RosterEntry entry : roster.getEntries())
 		{
@@ -857,17 +843,10 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			item.setRosterJID(entry.getJid());
 			final Subscription sub = entry.canSeeHisPresence() ? Subscription.APPROVED : (entry.isSubscriptionPending() ? Subscription.REQUESTED : Subscription.DENIED);
 			
-			if (blockList.containsKey(entry.getJid().asBareJid()))
-			{
-				item.setPresence(Presense.BLOCKED);
-			}
+			if (sub == Subscription.APPROVED)
+				item.setPresence(Presense.UNAVAILABLE);
 			else
-			{
-				if (sub == Subscription.APPROVED)
-					item.setPresence(Presense.UNAVAILABLE);
-				else
-					item.setPresence(Presense.NOT_AUTHORIZED);
-			}
+				item.setPresence(Presense.NOT_AUTHORIZED);
 			
 			item.setSub(sub);
 			
@@ -878,6 +857,43 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		contactsList.updateUI();
 	}
 	
+	protected void loadBlockList()
+	{
+		try
+		{
+			final List<Jid> blockedJids = BlockingCommandManager.getInstanceFor(con).getBlockList();
+			
+			updateRosterWithBlockedJids(blockedJids);
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	protected void updateRosterWithBlockedJids(List<Jid> blockedJids)
+	{
+		if (blockedJids == null || blockedJids.size() == 0)
+			return;
+		
+		// get the block list and put it in a map
+		final Map<Jid, Jid> blockList = new HashMap<>();
+		
+		for (Jid blockJid : blockedJids)
+			blockList.put(blockJid.asBareJid(), blockJid.asBareJid());
+		
+		final RosterTableModel tableModel = (RosterTableModel)contactsList.getModel();
+		for (int idx = 0; idx < tableModel.getRowCount(); ++ idx)
+		{
+			final RosterItem item = (RosterItem)tableModel.getValueAt(idx, 0);
+			if (blockList.containsKey(item.getRosterJID().asBareJid()))
+			{
+				item.setPresence(Presense.BLOCKED);
+				tableModel.setValueAt(item, idx, 0);
+			}
+		}
+
+	}
 	
 	protected void contactPresenseUpdated(Presence pres)
 	{
@@ -1114,6 +1130,36 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 					showDropDown.setSelectedIndex(idx);
 					
 					break;
+				}
+			}
+		}
+	}
+
+	@Override
+	public void onJidsBlocked(List<Jid> blockedJids)
+	{
+		updateRosterWithBlockedJids(blockedJids);		
+	}
+
+	@Override
+	public void onJidsUnblocked(List<Jid> unblockedJids)
+	{
+		// get the block list and put it in a map
+		final Map<Jid, Jid> unblockListMap = new HashMap<>();
+		
+		for (Jid unblockJid : unblockedJids)
+			unblockListMap.put(unblockJid.asBareJid(), unblockJid.asBareJid());
+		
+		final RosterTableModel tableModel = (RosterTableModel)contactsList.getModel();
+		for (int idx = 0; idx < tableModel.getRowCount(); ++ idx)
+		{
+			final RosterItem item = (RosterItem)tableModel.getValueAt(idx, 0);
+			if (unblockListMap.containsKey(item.getRosterJID().asBareJid()))
+			{
+				if (item.getPresence() == Presense.BLOCKED)
+				{
+					item.setPresence(Presense.UNAVAILABLE);
+					tableModel.setValueAt(item, idx, 0);
 				}
 			}
 		}
