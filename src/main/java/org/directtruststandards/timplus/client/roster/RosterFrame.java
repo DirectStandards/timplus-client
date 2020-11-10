@@ -488,6 +488,9 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
     		}
     	});
     	
+		// init the chat manager
+		SingleChatManager.getInstance(con).setConnection(con);
+    	
 		Presence pres = new Presence(Presence.Type.available);
 		pres.setStatus("Available");
 		try 
@@ -502,9 +505,6 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		// listen for roster block changes
 		BlockingCommandManager.getInstanceFor(con).addJidsBlockedListener(this);
 		BlockingCommandManager.getInstanceFor(con).addJidsUnblockedListener(this);
-		
-		// init the chat manager
-		SingleChatManager.getInstance(con).setConnection(con);
 		
 		// init the group chat manager
 		GroupChatManager.getInstance(con).setConnection(con);
