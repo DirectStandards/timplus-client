@@ -64,6 +64,7 @@ import org.jivesoftware.smack.sasl.SASLErrorException;
 import org.jivesoftware.smackx.blocking.BlockingCommandManager;
 import org.jivesoftware.smackx.blocking.JidsBlockedListener;
 import org.jivesoftware.smackx.blocking.JidsUnblockedListener;
+import org.jivesoftware.smackx.iqversion.VersionManager;
 import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.muc.RoomInfo;
 import org.jxmpp.jid.EntityBareJid;
@@ -512,6 +513,9 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		
 		// init the incoming file transfer manager
 		IncomingFileTransferManager.getInstance(con, this).setConnection(con);
+		
+		// init the version manager responder
+		VersionManager.getInstanceFor(con).setVersion("TIM+ JavaRI Client", "1.0.0");
 		
 		// start the user activity manager
 		UserActivityManager.getInstance().start();

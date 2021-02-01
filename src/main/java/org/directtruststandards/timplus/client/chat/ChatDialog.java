@@ -456,7 +456,7 @@ public class ChatDialog extends JDialog
 			        Element span = doc.createElement("span");
 			        span.setAttribute("style", "color:gray;float:right;");
 			        
-			        Element delStatus = doc.createElement(stanza.getStanzaId());
+			        Element delStatus = doc.createElement(normalizeCutsomTagName(stanza.getStanzaId()));
 			        span.appendChild(delStatus);
 			        
 			        
@@ -511,7 +511,7 @@ public class ChatDialog extends JDialog
 			final WebEngine engine = webChatView.getEngine();
 	        final Document doc = engine.getDocument();
 	        
-	        final org.w3c.dom.NodeList notifNodes = doc.getElementsByTagName(notif.getStanzaId());
+	        final org.w3c.dom.NodeList notifNodes = doc.getElementsByTagName(normalizeCutsomTagName(notif.getStanzaId()));
 	        if (notifNodes != null && notifNodes.getLength() != 0)
 	        {
 	        	final Element notifEl = (Element)notifNodes.item(0);
@@ -624,5 +624,20 @@ public class ChatDialog extends JDialog
 		        }
 			}
 		}
+	}
+	
+	protected String normalizeCutsomTagName(String tag)
+	{
+		// since we are using stanza ids as tag names, there is a chance
+		// that an invalid tag name character will be used.  For our purposes, we will
+		// just simply replace these characters with a "0"
+		
+		String repStr = tag;
+		/*
+		 * Replace dashses
+		 */
+		repStr = repStr.replace("-", "0");
+		
+		return repStr;
 	}
 }
