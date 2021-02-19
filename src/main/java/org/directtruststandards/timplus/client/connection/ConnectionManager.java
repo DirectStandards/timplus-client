@@ -20,7 +20,9 @@ import org.directtruststandards.timplus.client.config.ConfigurationManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.XMPPConnection;
-
+import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
+import org.jivesoftware.smack.bosh.BOSHConfiguration;
+import org.jivesoftware.smack.bosh.XMPPBOSHConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration.Builder;
@@ -160,6 +162,20 @@ public class ConnectionManager
 			
 			con = new XMPPTCPConnection(xmppConfig);
 			
+			/*
+			 * Test BOSH
+			 */
+			
+			/*
+			BOSHConfiguration boshConfig = BOSHConfiguration.builder().setHost("localhost").setXmppDomain("cernerdirectsupport.com")
+					.setFile("/http-bind/").setPort(7070).setSecurityMode(SecurityMode.ifpossible).setUsernameAndPassword("ah4626", "1kingpuff")
+					.build();
+	        
+			con = new XMPPBOSHConnection(boshConfig);
+			
+			/*
+			 * End Test Bosh
+			 */
 			System.out.println("Adding connection listeners");
 			con.addConnectionListener(new ConnectionListener()
 			{

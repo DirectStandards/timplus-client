@@ -23,6 +23,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.StringReader;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -103,9 +104,25 @@ public class ChatDialog extends JDialog
 	
 	protected WebView webChatView;
 	
+	protected Method unlockResource;
+	
 	public ChatDialog(Jid contactJid, AbstractXMPPConnection con)
 	{
 		super((Frame)null, contactJid.toString());
+		
+		/**
+		 * The is a "bug" in the used version of the chat manager that 
+		 * permanently locks onto a recipients resource even after the recipients
+		 * has logged off and reconnected with a new resource.
+		 * This "hack" will always send to a bare JID until a better alternative is 
+		 * coded.
+		 */
+		try
+		{
+			unlockResource = Chat.class.getDeclaredMethod("unlockResource");
+			unlockResource.setAccessible(true);
+		}
+		catch (Exception e) {/* no op */}
 		
 		this.contactJid = contactJid;
 
@@ -424,6 +441,13 @@ public class ChatDialog extends JDialog
 			
 			try
 			{
+				if (unlockResource != null)
+					unlockResource.invoke(chat);
+			}
+			catch (Exception e) {/* no op */}
+
+			try
+			{
 				final String text = createText.getText().trim();
 				
 		        final Message stanza = new Message();
@@ -637,6 +661,15 @@ public class ChatDialog extends JDialog
 		 * Replace dashses
 		 */
 		repStr = repStr.replace("-", "0");
+		
+		/*
+		 * If the first character is a number, replace it with an 'A'
+		 * Chances of collision are very small.
+		 */
+		if (Character.isDigit(repStr.charAt(0)))
+		{
+			repStr = repStr.replace(repStr.charAt(0), 'A');
+		}
 		
 		return repStr;
 	}
