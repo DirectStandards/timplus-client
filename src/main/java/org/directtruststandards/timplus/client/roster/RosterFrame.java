@@ -933,16 +933,27 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 				}
 				else if (pres.getType() == Presence.Type.unavailable)
 				{
+					
 					rosterItem.setPresence(RosterItem.Presense.UNAVAILABLE);
 					contactsList.getModel().setValueAt(rosterItem, i, 0);
 					// double check the presense in case this user is logged in
 					// via more than 1 client (might have multiple resources)
-					final Presence presense = roster.getPresence(contact.getRosterJID().asBareJid());
-					if (presense != null && presense.getType() == Presence.Type.available)
+					// if the current presence message does not indicate a resource, 
+					// this is likely due to being blocked and we should indicate UNAVAILABLE
+					if (pres.getFrom().getResourceOrNull() != null)
 					{
-						rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
-						contactsList.getModel().setValueAt(rosterItem, i, 0);
-					}	
+						final Presence presense = roster.getPresence(contact.getRosterJID().asBareJid());
+						
+						// make sure the presence stance resource does not match the 
+						// resource part of the unavailable message
+						if (presense != null && presense.getType() == Presence.Type.available
+								&& !presense.getFrom().equals(pres.getFrom())
+								&& !pres.getFrom().getResourceOrNull().equals(presense.getFrom().getResourceOrNull()))
+						{
+							rosterItem.setPresence(RosterItem.Presense.AVAILABLE);
+							contactsList.getModel().setValueAt(rosterItem, i, 0);
+						}	
+					}
 				}
 				// need to check the roster and see if the approval status changed
 				for (RosterEntry entry : roster.getEntries())
