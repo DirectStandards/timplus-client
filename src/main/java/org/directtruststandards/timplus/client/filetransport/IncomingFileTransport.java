@@ -159,7 +159,7 @@ public class IncomingFileTransport implements JingleHandler
 						
 						System.out.println("Contact " + jingle.getFrom().asBareJid().toString() + " requesting to send file.");
 		    			int selection = JOptionPane.showConfirmDialog(parentFrame, jingle.getFrom().asBareJid().toString() + " is requesting to send \r\nthe file " 
-		    					+ ftSession.fileName + ".  Do want to accept this file?",
+		    					+ ftSession.fileName + ".  Do you want to accept this file?",
 		    					"File Transfer", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
 						
 		    			if (selection == JOptionPane.NO_OPTION)
