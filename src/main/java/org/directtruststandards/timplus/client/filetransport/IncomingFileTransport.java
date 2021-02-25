@@ -521,7 +521,9 @@ public class IncomingFileTransport implements JingleHandler
 				
 				ftSession.ibbInputStream = session.getInputStream();
 				
-				transferFileExecutor.execute(new IBBReadManager(ftSession));
+				FileTransferDataListener listener = fileTransferDataListeners.get(ftSession.streamId);
+				
+				transferFileExecutor.execute(new IBBReadManager(ftSession, listener));
 				
 			}
 			catch (Exception e)

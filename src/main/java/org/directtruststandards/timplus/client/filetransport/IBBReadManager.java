@@ -19,11 +19,15 @@ public class IBBReadManager implements Runnable
 	
 	protected final JingleUtil util;
 	
-	public IBBReadManager(FileTransferSession ftSession)
+	protected final FileTransferDataListener dataListener;
+	
+	public IBBReadManager(FileTransferSession ftSession, FileTransferDataListener dataListener)
 	{
 		this.ftSession = ftSession;
 		
 		this.util = new JingleUtil(ftSession.con);
+		
+		this.dataListener = dataListener;
 		
 		this.jingleManager = JingleManager.getInstanceFor(ftSession.con);
 	}
@@ -56,7 +60,7 @@ public class IBBReadManager implements Runnable
 
 					try 
 					{
-						if (listener.dataTransfered(readSoFar) != 0)
+						if (listener.dataTransfered(readSoFar) != 0 || (dataListener != null && dataListener.dataTransfered(readSoFar) != 0))
 						{
 							// the transfer was interrupted by the listener
 							
