@@ -316,6 +316,7 @@ public class GroupChatDialog extends JDialog
 		}
 		
 		final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
+		builder.append(msg.getFrom().getResourceOrNull());		
 		
         while (webChatView == null)
         {
