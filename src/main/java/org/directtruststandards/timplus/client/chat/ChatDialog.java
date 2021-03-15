@@ -60,6 +60,7 @@ import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
+import org.jivesoftware.smack.packet.StanzaError;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smackx.chatstates.ChatState;
 import org.jivesoftware.smackx.chatstates.packet.ChatStateExtension;
@@ -543,6 +544,32 @@ public class ChatDialog extends JDialog
 	        }
 		});
 
+	}
+	
+	public void onIncomingErrorMessage(Message msg)
+	{
+		final StringBuilder builder = new StringBuilder("  error");
+		
+	    final StanzaError err = msg.getError();
+		
+	    if (err.getCondition() != null)
+	    	builder.append(" (").append(err.getCondition().toString()).append(")");
+	    else
+	    	builder.append(" (").append("unknown error").append(")");
+	    
+		Platform.runLater(() -> 
+		{
+			final WebEngine engine = webChatView.getEngine();
+	        final Document doc = engine.getDocument();
+	        
+	        final org.w3c.dom.NodeList notifNodes = doc.getElementsByTagName(normalizeCutsomTagName(msg.getStanzaId()));
+	        if (notifNodes != null && notifNodes.getLength() != 0)
+	        {
+	        	final Element notifEl = (Element)notifNodes.item(0);
+	        	notifEl.setTextContent(builder.toString());
+	        	notifEl.setAttribute("style", "color:red");
+	        }
+		});
 	}
 	
 	protected void sendFile(DropTargetDropEvent evt)

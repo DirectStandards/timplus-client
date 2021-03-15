@@ -11,10 +11,15 @@ import org.directtruststandards.timplus.client.notifications.AMPMessageNotificat
 import org.directtruststandards.timplus.client.notifications.AMPNotificationManager;
 import org.directtruststandards.timplus.client.notifications.IncomingAMPMessageListener;
 import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.SmackException.NotConnectedException;
+import org.jivesoftware.smack.SmackException.NotLoggedInException;
+import org.jivesoftware.smack.StanzaListener;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
+import org.jivesoftware.smack.filter.MessageTypeFilter;
 import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smackx.chatstates.ChatState;
 import org.jivesoftware.smackx.chatstates.ChatStateListener;
 import org.jivesoftware.smackx.chatstates.ChatStateManager;
@@ -89,6 +94,19 @@ public class SingleChatManager
 			}
         	
         });
+        
+        con.addAsyncStanzaListener(new StanzaListener()
+		{
+
+			@Override
+			public void processStanza(Stanza packet)
+					throws NotConnectedException, InterruptedException, NotLoggedInException 
+			{
+				processIncomingErrorMessage(packet.getFrom().asEntityBareJidIfPossible(), (Message)packet);
+				
+			}
+	
+		}, MessageTypeFilter.ERROR);
         
         chatStateManager = ChatStateManager.getInstance(con);
         chatStateManager.addChatStateListener( new ChatStateListener()
@@ -166,4 +184,16 @@ public class SingleChatManager
 		if (chat != null)
 			chat.onIncomingAMPMessage(notif);
 	}
+	
+	protected void processIncomingErrorMessage(EntityBareJid from, Message message)
+	{
+		if (from != null)
+		{
+			final ChatDialog chat = activeChats.get(from.asBareJid());
+			
+			if (chat != null)
+				chat.onIncomingErrorMessage(message);
+		}
+	}
+	
 }
