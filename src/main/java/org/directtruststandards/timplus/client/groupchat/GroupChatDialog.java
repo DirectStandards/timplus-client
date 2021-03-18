@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -38,6 +39,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.commons.lang3.StringUtils;
+import org.directtruststandards.timplus.client.config.PreferencesManager;
 import org.directtruststandards.timplus.client.roster.GroupChatItem;
 import org.directtruststandards.timplus.client.util.DocumentUtils;
 import org.directtruststandards.timplus.client.util.WrapEditorKit;
@@ -52,6 +54,7 @@ import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.xhtmlim.packet.XHTMLExtension;
 import org.jxmpp.jid.EntityFullJid;
 import org.jxmpp.jid.impl.JidCreate;
+import org.jxmpp.jid.parts.Resourcepart;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.xml.sax.InputSource;
@@ -270,6 +273,8 @@ public class GroupChatDialog extends JDialog
 		
 		room = MultiUserChatManager.getInstanceFor(con).getMultiUserChat(room.getRoom());
 		
+		final String nickString = PreferencesManager.getInstance().getPreferences().getGroupChatNickName();
+		
 		room.addMessageListener(new MessageListener() 
 		{
 			@Override
@@ -290,19 +295,46 @@ public class GroupChatDialog extends JDialog
 				presenceUpdated(presence);
 			}
 			
-		});
+		});		
+		
+		try
+		{
+			final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
+			Resourcepart.from(nickString);
+		
+			room.join(nickname);
+		}
+		catch (Exception e)
+		{
+			JOptionPane.showMessageDialog(null, "An error occured joining the group chat room.", 
+		 		    "Group chat failure", JOptionPane.ERROR_MESSAGE );
+			
+			setVisible(false);
+			return;
+		}
 	}
 	
 	public void onIncomingMessage(final Message msg)
 	{
-		if (msg.getFrom().getResourceOrNull() == null)
-			return;
+		final AtomicBoolean isFromMe = new AtomicBoolean(false);
 		
-		if (room.getNickname().equals(msg.getFrom().getResourceOrNull()))
+		if (msg.getFrom().getResourceOrNull() == null)
 			return;
 		
 		// check to see if this is a delayed message
 	    final DelayInformation delay = (DelayInformation)msg.getExtension(DelayInformation.NAMESPACE);
+		
+	    /*
+	     * If the message is from ourself, but has a delayed time, then we will
+	     * go ahead and put the message in the conversation panel and tag it as history
+	     */
+		if (room.getNickname().equals(msg.getFrom().getResourceOrNull()))
+		{
+			if (delay == null)
+				return;
+			else
+				isFromMe.set(true);
+		}
 		
 		final String pattern = "HH:mm:ss";
 		final SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
@@ -316,7 +348,10 @@ public class GroupChatDialog extends JDialog
 		}
 		
 		final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
-		builder.append(msg.getFrom().getResourceOrNull());		
+		if (isFromMe.get())
+			builder.append("Me");
+		else
+			builder.append(msg.getFrom().getResourceOrNull());		
 		
         while (webChatView == null)
         {
@@ -350,7 +385,10 @@ public class GroupChatDialog extends JDialog
 	        Element body = (Element) webDoc.getElementsByTagName("body").item(0);
 			
 	        Element msgHeader = webDoc.createElement("i");
-	        msgHeader.setAttribute("style", "color:red");
+	        if (isFromMe.get())
+	        	msgHeader.setAttribute("style", "color:blue");
+	        else
+	        	msgHeader.setAttribute("style", "color:red");
 	        msgHeader.setTextContent(builder.toString());
 	        
 	        body.appendChild(msgHeader);
@@ -516,26 +554,30 @@ public class GroupChatDialog extends JDialog
 			{				
 				final WebEngine engine = webChatView.getEngine();
 		        Document doc = engine.getDocument();
-		        Element body = (Element) doc.getElementsByTagName("body").item(0);
-				
-		        Element msgHeader = doc.createElement("i");
-		        msgHeader.setAttribute("style", "color:red");
-		        msgHeader.setTextContent(builder.toString());
 		        
-		        body.appendChild(msgHeader);
-		        
-		        Element br = doc.createElement("br");
-		        body.appendChild(br);
-		        
-		        Element msg = doc.createElement("msg");
-		        msg.setAttribute("style", "color:grey");
-		        msg.setTextContent(actionText);
-		        body.appendChild(msg);
-		        
-		        Element br2 = doc.createElement("br");
-		        body.appendChild(br2);
-		        
-		        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+		        if (doc != null)
+		        {
+			        Element body = (Element) doc.getElementsByTagName("body").item(0);
+					
+			        Element msgHeader = doc.createElement("i");
+			        msgHeader.setAttribute("style", "color:red");
+			        msgHeader.setTextContent(builder.toString());
+			        
+			        body.appendChild(msgHeader);
+			        
+			        Element br = doc.createElement("br");
+			        body.appendChild(br);
+			        
+			        Element msg = doc.createElement("msg");
+			        msg.setAttribute("style", "color:grey");
+			        msg.setTextContent(actionText);
+			        body.appendChild(msg);
+			        
+			        Element br2 = doc.createElement("br");
+			        body.appendChild(br2);
+			        
+			        webChatView.getEngine().executeScript("window.scrollTo(0, document.body.scrollHeight);");
+		        }
 			});		
 		}
 	}

@@ -172,27 +172,9 @@ public class GroupChatManager
 	public void reEnterGroupChat(EntityBareJid jid)
 	{
 		final MultiUserChat room  = roomManager.getMultiUserChat(jid);
-		
-		final GroupChatDialog diag = activeChats.get(jid);
-		if (diag != null)
-		{
-			EventQueue.invokeLater(() ->
-			{
-				diag.toFront();
-				diag.repaint();
-			});
-			return;
-		}
 
 		try
 		{
-			final String nickString = PreferencesManager.getInstance().getPreferences().getGroupChatNickName();
-			
-			final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
-				Resourcepart.from(nickString);
-			
-			room.join(nickname);
-			
 			createChatDialog(room);
 		}
 		catch (Exception e)
@@ -247,14 +229,7 @@ public class GroupChatManager
 			
 			if (selection == JOptionPane.NO_OPTION)
 				return;	
-			
-			final String nickString = PreferencesManager.getInstance().getPreferences().getGroupChatNickName();
-			
-			final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
-				Resourcepart.from(nickString);
-			
-			room.join(nickname);
-			
+					
 			
 			createChatDialog(room);
 			
