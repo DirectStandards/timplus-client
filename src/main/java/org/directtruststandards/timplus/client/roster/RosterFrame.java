@@ -41,6 +41,7 @@ import javax.swing.ListSelectionModel;
 import org.directtruststandards.timplus.client.chat.SingleChatManager;
 import org.directtruststandards.timplus.client.config.Configuration;
 import org.directtruststandards.timplus.client.config.ConfigurationManager;
+import org.directtruststandards.timplus.client.config.PreferencesManager;
 import org.directtruststandards.timplus.client.connection.ConnectionListener;
 import org.directtruststandards.timplus.client.connection.ConnectionManager;
 import org.directtruststandards.timplus.client.filetransport.IncomingFileTransferManager;
@@ -303,6 +304,17 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			}	
 		});
 		accountMenu.add(configAccount);
+		
+		final JMenuItem preferences = new JMenuItem("Preferences...");
+		preferences.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				maintainPreferences();
+			}	
+		});
+		accountMenu.add(preferences);
 		
 		menuBar.add(contactsMenu);
 		menuBar.add(groupChatMenu);
@@ -635,6 +647,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			item.setPresence(Presense.NOT_AUTHORIZED);
 			item.setRosterJID(contactJid);
 			item.setSub(Subscription.REQUESTED);
+			item.setAlias(alias);
 			
 			RosterTableModel model = (RosterTableModel)contactsList.getModel();
 			model.addRow(item);
@@ -760,7 +773,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 		{
 			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
 		
-			SingleChatManager.getInstance(con).createChat(item.getRosterJID());
+			SingleChatManager.getInstance(con).createChat(item);
 		}
 	}
 	
@@ -845,6 +858,7 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			final RosterItem item = new RosterItem();
 			
 			item.setRosterJID(entry.getJid());
+			item.setAlias(entry.getName());
 			final Subscription sub = entry.canSeeHisPresence() ? Subscription.APPROVED : (entry.isSubscriptionPending() ? Subscription.REQUESTED : Subscription.DENIED);
 			
 			if (sub == Subscription.APPROVED)
@@ -1178,5 +1192,10 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 				}
 			}
 		}
+	}
+	
+	protected void maintainPreferences()
+	{
+		PreferencesManager.getInstance().doMaintainPreferences(this);
 	}
 }

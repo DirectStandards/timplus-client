@@ -15,6 +15,8 @@ import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.table.TableCellRenderer;
 
+import org.apache.commons.lang3.StringUtils;
+
 
 public class RosterItemRenderer implements TableCellRenderer
 {
@@ -129,7 +131,10 @@ public class RosterItemRenderer implements TableCellRenderer
 					presLabel.setIcon(OFFLINE);
 			}
 			
-			displayLabel.setText(item.getRosterJID().asBareJid().toString());
+			if (!StringUtils.isEmpty(item.getAlias()))
+				displayLabel.setText(item.getAlias());
+			else
+				displayLabel.setText(item.getRosterJID().asBareJid().toString());
 		}
 		
 		return renderPanel;

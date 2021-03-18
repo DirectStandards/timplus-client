@@ -542,7 +542,7 @@ public class GroupChatDialog extends JDialog
 	
 	protected void inviteContact()
 	{
-		final GroupChatInviteDialog diag = new GroupChatInviteDialog(this);
+		final GroupChatInviteDialog diag = new GroupChatInviteDialog(this, con);
 		
 		diag.setVisible(true);
 		

@@ -1,5 +1,6 @@
 package org.directtruststandards.timplus.client.groupchat;
 
+import java.awt.BorderLayout;
 import java.awt.EventQueue;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -11,11 +12,19 @@ import java.util.Map;
 import java.util.UUID;
 
 import javax.swing.JDialog;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 
+import org.apache.commons.lang3.StringUtils;
+import org.directtruststandards.timplus.client.config.PreferencesManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smackx.muc.InvitationListener;
 import org.jivesoftware.smackx.muc.MucEnterConfiguration;
 import org.jivesoftware.smackx.muc.MultiUserChat;
@@ -108,7 +117,7 @@ public class GroupChatManager
 			public void invitationReceived(XMPPConnection conn, MultiUserChat room, EntityJid inviter,
 					String reason, String password, Message message, Invite invitation)
 			{
-				GroupChatManager.this.invitationReceived(room, inviter);	
+				GroupChatManager.this.invitationReceived(room, inviter, invitation);	
 			}
 		});
         
@@ -140,7 +149,10 @@ public class GroupChatManager
 	
 	protected void joinRoom(MultiUserChat room) throws Exception
 	{
-		final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
+		final String nickString = PreferencesManager.getInstance().getPreferences().getGroupChatNickName();
+		
+		final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
+			Resourcepart.from(nickString);
 		
 		final MucEnterConfiguration mucConfig = room.getEnterConfigurationBuilder(nickname).build();
 		
@@ -174,7 +186,10 @@ public class GroupChatManager
 
 		try
 		{
-			final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
+			final String nickString = PreferencesManager.getInstance().getPreferences().getGroupChatNickName();
+			
+			final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
+				Resourcepart.from(nickString);
 			
 			room.join(nickname);
 			
@@ -188,7 +203,7 @@ public class GroupChatManager
 		}
 	}
 	
-	protected void invitationReceived(MultiUserChat room, EntityJid inviter)
+	protected void invitationReceived(MultiUserChat room, EntityJid inviter, Invite invitation)
 	{
 		if (room.isJoined())
 		{
@@ -202,14 +217,41 @@ public class GroupChatManager
 		}
 		try
 		{
+			String contactId = inviter.asEntityBareJidString();
+			// look through the roster and see if there an entry with this same JID
+			for (RosterEntry entry : Roster.getInstanceFor(con).getEntries())
+			{
+				if (entry.getJid().equals(inviter.asBareJid()))
+				{
+					contactId = entry.getName();
+					break;
+				}
+			}			
 			
-			int selection = JOptionPane.showConfirmDialog(null, inviter.asEntityBareJidString() + " has invited you to a group chat.\r\nDo you wish to join?",
+			
+			final JPanel textPanel = new JPanel(new BorderLayout());
+			final JLabel textLabel = new JLabel(contactId + " has invited you to a group chat.\r\nDo you wish to join?");
+			textPanel.add(textLabel, BorderLayout.NORTH);
+			
+			if (invitation != null && !StringUtils.isEmpty(invitation.getReason()))
+			{
+				final JTextArea msgText = new JTextArea(invitation.getReason());
+				msgText.setEditable(false);
+				final JScrollPane msgTextScroll = new JScrollPane(msgText);
+				textPanel.add(msgTextScroll, BorderLayout.CENTER);
+				
+			}
+			
+			int selection = JOptionPane.showConfirmDialog(null, textPanel,
 					"Chat Room", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
 			
 			if (selection == JOptionPane.NO_OPTION)
 				return;	
 			
-			final Resourcepart nickname = Resourcepart.from(con.getUser().getLocalpart().toString());
+			final String nickString = PreferencesManager.getInstance().getPreferences().getGroupChatNickName();
+			
+			final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
+				Resourcepart.from(nickString);
 			
 			room.join(nickname);
 			

@@ -53,6 +53,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.filetransport.OutgoingFileTransferDialog;
 import org.directtruststandards.timplus.client.notifications.AMPMessageNotification;
+import org.directtruststandards.timplus.client.roster.RosterItem;
 import org.directtruststandards.timplus.client.util.DocumentUtils;
 import org.directtruststandards.timplus.client.util.WrapEditorKit;
 import org.jivesoftware.smack.AbstractXMPPConnection;
@@ -93,7 +94,7 @@ public class ChatDialog extends JDialog
 	
 	protected AbstractXMPPConnection con;
 	
-	protected Jid contactJid;
+	protected RosterItem rosterItem;
 	
 	protected JTextPane createText;
 	
@@ -107,9 +108,9 @@ public class ChatDialog extends JDialog
 	
 	protected Method unlockResource;
 	
-	public ChatDialog(Jid contactJid, AbstractXMPPConnection con)
+	public ChatDialog(RosterItem rosterItem, AbstractXMPPConnection con)
 	{
-		super((Frame)null, contactJid.toString());
+		super((Frame)null, StringUtils.isEmpty(rosterItem.getAlias()) ? rosterItem.getRosterJID().toString() : rosterItem.getAlias());
 		
 		/**
 		 * The is a "bug" in the used version of the chat manager that 
@@ -125,7 +126,7 @@ public class ChatDialog extends JDialog
 		}
 		catch (Exception e) {/* no op */}
 		
-		this.contactJid = contactJid;
+		this.rosterItem = rosterItem;
 
 		this.con = con;
 		
@@ -322,8 +323,11 @@ public class ChatDialog extends JDialog
 	{
 		EventQueue.invokeLater(() ->
 		{
+			final String contactID = StringUtils.isEmpty(rosterItem.getAlias()) ? 
+					rosterItem.getRosterJID().getLocalpartOrNull().toString() : rosterItem.getAlias();
+			
 			if (state == ChatState.composing)
-				activityLabel.setText(contactJid.getLocalpartOrNull() + " is typing");
+				activityLabel.setText(contactID + " is typing");
 			else
 				activityLabel.setText(" ");
 		});
@@ -346,8 +350,11 @@ public class ChatDialog extends JDialog
 			date = simpleDateFormat.format(delay.getStamp()) + " Offline";
 		}
 		
+		final String contactID = StringUtils.isEmpty(rosterItem.getAlias()) ? 
+				rosterItem.getRosterJID().asBareJid().getLocalpartOrNull().toString() : rosterItem.getAlias();
+		
 		final StringBuilder builder = new StringBuilder("(").append(date).append(") ");
-		builder.append(msg.getFrom().asBareJid().getLocalpartOrNull());
+		builder.append(contactID);
 
         while (webChatView == null)
         {
@@ -438,7 +445,7 @@ public class ChatDialog extends JDialog
 		if (!StringUtils.isEmpty(createText.getText().trim()))
 		{
 			final ChatManager mgr  = ChatManager.getInstanceFor(con);
-			final Chat chat = mgr.chatWith(contactJid.asEntityBareJidIfPossible());
+			final Chat chat = mgr.chatWith(rosterItem.getRosterJID().asEntityBareJidIfPossible());
 			
 			try
 			{
@@ -593,19 +600,22 @@ public class ChatDialog extends JDialog
             	// make sure the recipient is online
             	final Roster roster = Roster.getInstanceFor(con);
             	
-        		final Presence presense = roster.getPresence(contactJid.asBareJid());
+    			final String contactID = StringUtils.isEmpty(rosterItem.getAlias()) ? 
+    					rosterItem.getRosterJID().asBareJid().toString() : rosterItem.getAlias();
+            	
+        		final Presence presense = roster.getPresence(rosterItem.getRosterJID().asBareJid());
         		final Jid resourceJid = presense.getFrom();
         		if (resourceJid == null || !(resourceJid instanceof EntityFullJid))
         		{
-					JOptionPane.showMessageDialog(this,"No online resources found for " + contactJid.asBareJid().toString() + ".\r\nCannot transfer file.", 
+					JOptionPane.showMessageDialog(this,"No online resources found for " + contactID + ".\r\nCannot transfer file.", 
 				 		    "File Transfer", JOptionPane.WARNING_MESSAGE);
-        			System.out.println("No online resources found for " + contactJid.asBareJid().toString() + ".  ");
+        			System.out.println("No online resources found for " + contactID + ".  ");
         			return;
         		}
             	
             	final File transFile = droppedFiles.get(0);
             	
-    			int selection = JOptionPane.showConfirmDialog(this, "Do you wish to send the file " + transFile.getName() +  " \r\nto recipient " + this.contactJid.asBareJid().toString() + "?",
+    			int selection = JOptionPane.showConfirmDialog(this, "Do you wish to send the file " + transFile.getName() +  " \r\nto recipient " + contactID + "?",
     					"File Transfer", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
     			
     			if (selection == JOptionPane.NO_OPTION)
@@ -641,7 +651,7 @@ public class ChatDialog extends JDialog
 							continue;
 						
 						final ChatManager mgr  = ChatManager.getInstanceFor(con);
-						final Chat chat = mgr.chatWith(contactJid.asEntityBareJidIfPossible());
+						final Chat chat = mgr.chatWith(rosterItem.getRosterJID().asEntityBareJidIfPossible());
 						
 						activeChatState = ChatState.composing;
 						
@@ -658,7 +668,7 @@ public class ChatDialog extends JDialog
 							continue;
 						
 						final ChatManager mgr  = ChatManager.getInstanceFor(con);
-						final Chat chat = mgr.chatWith(contactJid.asEntityBareJidIfPossible());
+						final Chat chat = mgr.chatWith(rosterItem.getRosterJID().asEntityBareJidIfPossible());
 						
 						activeChatState = ChatState.active;
 						

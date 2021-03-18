@@ -10,6 +10,7 @@ import javax.swing.JDialog;
 import org.directtruststandards.timplus.client.notifications.AMPMessageNotification;
 import org.directtruststandards.timplus.client.notifications.AMPNotificationManager;
 import org.directtruststandards.timplus.client.notifications.IncomingAMPMessageListener;
+import org.directtruststandards.timplus.client.roster.RosterItem;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.SmackException.NotConnectedException;
 import org.jivesoftware.smack.SmackException.NotLoggedInException;
@@ -20,6 +21,8 @@ import org.jivesoftware.smack.chat2.IncomingChatMessageListener;
 import org.jivesoftware.smack.filter.MessageTypeFilter;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smackx.chatstates.ChatState;
 import org.jivesoftware.smackx.chatstates.ChatStateListener;
 import org.jivesoftware.smackx.chatstates.ChatStateManager;
@@ -119,9 +122,9 @@ public class SingleChatManager
         });
 	}
 	
-	public ChatDialog createChat(final Jid contactJid)
+	public ChatDialog createChat(final RosterItem rosterItem)
 	{
-		ChatDialog chat = activeChats.get(contactJid.asBareJid());
+		ChatDialog chat = activeChats.get(rosterItem.getRosterJID().asBareJid());
 		if (chat != null)
 		{
 			final ChatDialog theChat = chat;
@@ -139,20 +142,20 @@ public class SingleChatManager
 		}
 		else
 		{
-			final ChatDialog newChat = new ChatDialog(contactJid.asBareJid(), con);
+			final ChatDialog newChat = new ChatDialog(rosterItem, con);
 			newChat.addWindowListener(new  WindowAdapter()
 			{
 				@Override
 				public void windowClosed(WindowEvent e)
 				{
-					activeChats.remove(contactJid.asBareJid());
+					activeChats.remove(rosterItem.getRosterJID().asBareJid());
 					newChat.dispose();
 				}
 				
 			});
 			newChat.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 			newChat.setVisible(true);
-			activeChats.put(contactJid.asBareJid(), newChat);
+			activeChats.put(rosterItem.getRosterJID().asBareJid(), newChat);
 			
 			return newChat;
 		}
@@ -161,7 +164,22 @@ public class SingleChatManager
 	protected void processIncomingMessage(EntityBareJid from, Message message, Chat chat)
 	{
 		// create a chat window
-		final ChatDialog chatDialog = createChat(from.asBareJid());
+		 
+		final RosterItem item = new RosterItem();
+		item.setRosterJID(from.asBareJid());
+		
+		// look through the roster and see if there an entry with this same JID
+		// populate the alias if we can find an entry in the roster
+		for (RosterEntry entry : Roster.getInstanceFor(con).getEntries())
+		{
+			if (entry.getJid().equals(from.asBareJid()))
+			{
+				item.setAlias(entry.getName());
+				break;
+			}
+		}
+	
+		final ChatDialog chatDialog = createChat(item);
 
 		chatDialog.onIncomingMessage(message);
 	}

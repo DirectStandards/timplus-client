@@ -25,7 +25,7 @@ public class ConfigurationManager
 		return INSTANCE;
 	}
 	
-	public ConfigurationManager()
+	private ConfigurationManager()
 	{
 		final File configFile = new File("timplusClient.yml");
 		

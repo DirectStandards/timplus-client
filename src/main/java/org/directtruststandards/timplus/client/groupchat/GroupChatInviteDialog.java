@@ -8,14 +8,20 @@ import java.awt.Point;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
+import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.util.StringUtils;
 import org.jxmpp.jid.impl.JidCreate;
 
@@ -23,13 +29,15 @@ public class GroupChatInviteDialog extends JDialog
 {
 	private static final long serialVersionUID = 7628501375257987712L;
 
-	protected JTextArea inviteeText;
+	protected JComboBox<String> inviteeText;
 	
 	protected JTextArea messgaeText;
 	
+	protected AbstractXMPPConnection con;
+	
 	protected boolean invite;
 	
-	public GroupChatInviteDialog(Window parent)
+	public GroupChatInviteDialog(Window parent, AbstractXMPPConnection con)
 	{
 		super(parent, "Invite to conversation");
 		
@@ -45,6 +53,8 @@ public class GroupChatInviteDialog extends JDialog
 		
 		this.setLocation(pt.x - (250), pt.y - (100));	
 		
+		this.con = con;
+		
 		initUI();
 		
 		invite = false;
@@ -59,8 +69,18 @@ public class GroupChatInviteDialog extends JDialog
 		 */
 		final JPanel infoPanel = new JPanel(new GridLayout(4,1));
 		
+		
+		final Roster roster = Roster.getInstanceFor(con);
+		final ArrayList<String> contacts = new ArrayList<>();
+		for (RosterEntry entry : roster.getEntries())
+			contacts.add(entry.getJid().asBareJid().toString());
+		
+		Collections.sort(contacts);
+		
 		final JLabel inviteeLable = new JLabel("Invitee TIM+ Address");
-		inviteeText = new JTextArea();
+		inviteeText = new JComboBox<>(contacts.toArray(new String[contacts.size()]));
+		inviteeText.setEditable(true);
+		inviteeText.setSelectedIndex(-1);
 		
 		infoPanel.add(inviteeLable);
 		infoPanel.add(inviteeText);
@@ -124,7 +144,7 @@ public class GroupChatInviteDialog extends JDialog
 	
 	public String getInvitee()
 	{
-		return inviteeText.getText().trim();
+		return inviteeText.getEditor().getItem().toString().trim();
 	}
 	
 	public String getMessage()
@@ -134,7 +154,7 @@ public class GroupChatInviteDialog extends JDialog
 	
 	protected void validateInvitation()
 	{
-		if (StringUtils.isEmpty(this.inviteeText.getText().trim()))
+		if (StringUtils.isEmpty(getInvitee()))
 		{
 			JOptionPane.showMessageDialog(this,"Invitee cannot be empty.", 
 		 		    "Group Chat", JOptionPane.WARNING_MESSAGE);
@@ -144,7 +164,7 @@ public class GroupChatInviteDialog extends JDialog
 		
 		try
 		{
-			JidCreate.entityBareFrom(this.inviteeText.getText().trim());
+			JidCreate.entityBareFrom(getInvitee());
 		}
 		catch (Exception e)
 		{

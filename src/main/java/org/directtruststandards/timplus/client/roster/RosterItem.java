@@ -8,6 +8,7 @@ public class RosterItem
 	protected Presense presenceStatusText;
 	protected Jid rosterJID;
 	protected Subscription sub;
+	protected String alias;
 	
 	public RosterItem()
 	{
@@ -52,6 +53,16 @@ public class RosterItem
 	public void setSub(Subscription sub)
 	{
 		this.sub = sub;
+	}
+
+	public String getAlias() 
+	{
+		return alias;
+	}
+
+	public void setAlias(String alias) 
+	{
+		this.alias = alias;
 	}
 
 
