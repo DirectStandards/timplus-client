@@ -122,7 +122,7 @@ public class GroupChatManager
 		});
         
         for (GroupChatDialog chatDialog : activeChats.values())
-        	chatDialog.resetChat(con);
+        	chatDialog.resetChat(con, false);
         
 	}
 	
@@ -166,7 +166,7 @@ public class GroupChatManager
 		}
 		createConfig.makeInstant();
 		
-		createChatDialog(room);
+		createChatDialog(room, true);
 	}
 	
 	public void reEnterGroupChat(EntityBareJid jid)
@@ -175,7 +175,7 @@ public class GroupChatManager
 
 		try
 		{
-			createChatDialog(room);
+			createChatDialog(room, false);
 		}
 		catch (Exception e)
 		{
@@ -228,19 +228,18 @@ public class GroupChatManager
 					"Chat Room", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
 			
 			if (selection == JOptionPane.NO_OPTION)
-				return;	
-					
+				return;			
 			
-			createChatDialog(room);
+			createChatDialog(room, false);
 			
 		}
 		catch (Exception e)
 		{
-			// no-op
+			e.printStackTrace();
 		}
 	}
 	
-	protected GroupChatDialog createChatDialog(MultiUserChat room)
+	protected GroupChatDialog createChatDialog(MultiUserChat room, boolean initialRoomCreation)
 	{
 		GroupChatDialog chat = activeChats.get(room.getRoom());
 		if (chat != null)
@@ -256,7 +255,7 @@ public class GroupChatManager
 		}
 		else
 		{
-			final GroupChatDialog newChat = new GroupChatDialog(con, room);
+			final GroupChatDialog newChat = new GroupChatDialog(con, room, initialRoomCreation);
 			newChat.addWindowListener(new  WindowAdapter()
 			{
 				@Override

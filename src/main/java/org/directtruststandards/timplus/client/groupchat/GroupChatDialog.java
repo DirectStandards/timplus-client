@@ -89,7 +89,7 @@ public class GroupChatDialog extends JDialog
 	
 	protected WebView webChatView;
 	
-	public GroupChatDialog(AbstractXMPPConnection con, MultiUserChat room)
+	public GroupChatDialog(AbstractXMPPConnection con, MultiUserChat room, boolean initialRoomCreation)
 	{
 		super((Frame)null, "Group Chat: " + room.getRoom().getLocalpart());
 		
@@ -107,7 +107,7 @@ public class GroupChatDialog extends JDialog
 		
 		initUI();
 		
-		resetChat(con);
+		resetChat(con, initialRoomCreation);
 		
 		refreshMemberList();
 	}
@@ -267,8 +267,8 @@ public class GroupChatDialog extends JDialog
 		});
 	}
 	
-	public void resetChat(AbstractXMPPConnection con)
-	{
+	public void resetChat(AbstractXMPPConnection con, boolean initialRoomCreation)
+	{		
 		this.con = con;
 		
 		room = MultiUserChatManager.getInstanceFor(con).getMultiUserChat(room.getRoom());
@@ -297,20 +297,31 @@ public class GroupChatDialog extends JDialog
 			
 		});		
 		
-		try
-		{
-			final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
-			Resourcepart.from(nickString);
+		/*
+		 * If this is result of an initial room creation, we already joined the room
+		 * at the time that we created and unlocked the room.  Trying to rejoin at this point
+		 * could cause us to leave and try to rejoin which will cause the room to be destroyed
+		 * because we left the room and were the only occupants.  An empty room automatically
+		 * get destroyed.
+		 */
 		
-			room.join(nickname);
-		}
-		catch (Exception e)
+		if (!initialRoomCreation)
 		{
-			JOptionPane.showMessageDialog(null, "An error occured joining the group chat room.", 
-		 		    "Group chat failure", JOptionPane.ERROR_MESSAGE );
+			try
+			{
+				final Resourcepart nickname = (StringUtils.isEmpty(nickString)) ? Resourcepart.from(con.getUser().getLocalpart().toString()) :
+				Resourcepart.from(nickString);
 			
-			setVisible(false);
-			return;
+				room.join(nickname);
+			}
+			catch (Exception e)
+			{
+				JOptionPane.showMessageDialog(null, "An error occured joining the group chat room.", 
+			 		    "Group chat failure", JOptionPane.ERROR_MESSAGE );
+				
+				setVisible(false);
+				return;
+			}
 		}
 	}
 	
