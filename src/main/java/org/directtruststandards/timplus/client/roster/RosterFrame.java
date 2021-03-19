@@ -49,6 +49,7 @@ import org.directtruststandards.timplus.client.groupchat.GroupChatEvent;
 import org.directtruststandards.timplus.client.groupchat.GroupChatEventListener;
 import org.directtruststandards.timplus.client.groupchat.GroupChatManager;
 import org.directtruststandards.timplus.client.roster.AddContactDialog.AddContactStatus;
+import org.directtruststandards.timplus.client.roster.ModifyContactAliasDialog.ModifyAliasStatus;
 import org.directtruststandards.timplus.client.roster.RosterItem.Presense;
 import org.directtruststandards.timplus.client.roster.RosterItem.Subscription;
 import org.directtruststandards.timplus.client.vcard.VCardManager;
@@ -338,6 +339,18 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			}	
 		});
 		contactPopup.add(imItem);		
+		
+		final JMenuItem aliasItem = new JMenuItem("Modify Alias");
+		aliasItem.addActionListener(new ActionListener()
+		{
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				modifyAlias();
+				
+			}	
+		});
+		contactPopup.add(aliasItem);		
 		
 		final JMenuItem deleteItem = new JMenuItem("Delete");
 		deleteItem.addActionListener(new ActionListener()
@@ -651,6 +664,42 @@ public class RosterFrame extends JFrame implements ConnectionListener, UserActiv
 			
 			RosterTableModel model = (RosterTableModel)contactsList.getModel();
 			model.addRow(item);
+		}
+	}
+	
+	protected void modifyAlias()
+	{
+		int idx = contactsList.getSelectedRow();
+		if (idx >= 0)
+		{
+			final RosterItem item = (RosterItem)contactsList.getModel().getValueAt(idx, 0);
+			
+			final ModifyContactAliasDialog modifyAlias = new ModifyContactAliasDialog(this, item.getAlias());
+			modifyAlias.setVisible(true);
+			
+			if (modifyAlias.getModifyAliasStatus() == ModifyAliasStatus.MODIFY)
+			{
+				for (RosterEntry entry : roster.getEntries())
+				{
+					if (entry.getJid().equals(item.getRosterJID()))
+					{
+						try
+						{
+							entry.setName(modifyAlias.getAlias());
+							item.setAlias(modifyAlias.getAlias());
+						}
+						catch (Exception e)
+						{
+							JOptionPane.showMessageDialog(this,"An error occured updated the contact's alias.", 
+						 		    "Contact Error", JOptionPane.ERROR_MESSAGE );
+							return;
+						}
+						
+						contactsList.updateUI();
+						break;
+					}
+				}
+			}
 		}
 	}
 	
