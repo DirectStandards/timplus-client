@@ -17,6 +17,7 @@ import javax.net.ssl.X509TrustManager;
 import org.apache.commons.lang3.StringUtils;
 import org.directtruststandards.timplus.client.config.Configuration;
 import org.directtruststandards.timplus.client.config.ConfigurationManager;
+import org.directtruststandards.timplus.smack.tcp.XMPPNettyTCPConnection;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.XMPPConnection;
@@ -160,7 +161,7 @@ public class ConnectionManager
 			System.out.println("Building the connection object.");
 			XMPPTCPConnectionConfiguration xmppConfig = conBuilder.build();
 			
-			con = new XMPPTCPConnection(xmppConfig);
+			con = new XMPPNettyTCPConnection(xmppConfig);
 			
 			/*
 			 * Test BOSH
@@ -234,6 +235,10 @@ public class ConnectionManager
 			System.out.println("Connection successful.  Attempting to log in.");
 			con.login();
 			
+			System.out.println("Successfully connected and authenticated to server.");
+			
+			System.out.println("Executing post login operations.");
+			
 			for (org.directtruststandards.timplus.client.connection.ConnectionListener listener : connectionListeners)
 			{
 				try
@@ -243,7 +248,7 @@ public class ConnectionManager
 				catch (Exception e2) {}
 			}
 			
-			System.out.println("Successfully connected and authenticated to server.");
+			System.out.println("Post login operations complete");
 		}
 		catch (Exception e)
 		{
