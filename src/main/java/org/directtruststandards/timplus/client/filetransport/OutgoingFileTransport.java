@@ -38,6 +38,7 @@ import org.jivesoftware.smackx.jingle.element.Jingle;
 import org.jivesoftware.smackx.jingle.element.JingleAction;
 import org.jivesoftware.smackx.jingle.element.JingleContent;
 import org.jivesoftware.smackx.jingle.element.JingleContentDescription;
+import org.jivesoftware.smackx.jingle.element.JingleReason.Reason;
 import org.jivesoftware.smackx.jingle.element.JingleContent.Creator;
 import org.jivesoftware.smackx.jingle.transports.jingle_ibb.element.JingleIBBTransport;
 import org.jivesoftware.smackx.jingle.transports.jingle_s5b.JingleS5BTransportManager;
@@ -287,6 +288,13 @@ public class OutgoingFileTransport implements JingleSessionHandler
 		{
 			updateStatusListeners(FileTransferState.SESSION_TERIMINATE);
 			System.out.println("The recipient has terminated the session.");
+			
+			if (jingle.getReason().asEnum().equals(Reason.cancel))
+			{
+				// the sender canceled the transfer
+				System.out.println("The recipient canceled an existing transfer.");
+				updateStatusListeners(FileTransferState.SESSION_TERIMINATE_CANCEL);
+			}
 			
 			jingleManager.unregisterJingleSessionHandler(ftSession.fileTransferTargetJID, ftSession.streamId, OutgoingFileTransport.this);
 			

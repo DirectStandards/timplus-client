@@ -38,5 +38,5 @@ public enum FileTransferState
 	
 	SESSION_TERIMINATE,
 	
-
+	SESSION_TERIMINATE_CANCEL,
 }

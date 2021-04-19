@@ -286,7 +286,7 @@ public class IncomingFileTransport implements JingleHandler
 		if (ftSession == null)
 			return; 
 		
-		final Jingle sessionTerminate = util.createSessionTerminateFailedTransport(ftSession.initiatorJID, ftSession.streamId);
+		final Jingle sessionTerminate = util.createSessionTerminateCancel(ftSession.initiatorJID, ftSession.streamId);
 
 		con.sendIqRequestAsync(sessionTerminate);
 		
